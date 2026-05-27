@@ -9,6 +9,10 @@ const compatBanner = document.getElementById("compat-banner");
 const compatMsg = document.getElementById("compat-msg");
 const btnConnect = document.getElementById("btn-connect");
 const btnDisconnect = document.getElementById("btn-disconnect");
+const btnProgram = document.getElementById("btn-program");
+const btnVerify = document.getElementById("btn-verify");
+const btnReset = document.getElementById("btn-reset");
+const backendSelect = document.getElementById("backend-select");
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
 const fileInput = document.getElementById("file-input");
@@ -17,8 +21,12 @@ const imageMapEl = document.getElementById("image-map");
 
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus);
-const backend = backendManager.getBackend();
+const backendParam = new URLSearchParams(window.location.search).get("backend");
+const selectedBackendName = backendParam || "mock";
+backendSelect.value = selectedBackendName;
+let backend = backendManager.getBackend(selectedBackendName);
 let imageContext = null;
+let connected = false;
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}`;
@@ -32,8 +40,18 @@ function setStatus(message) {
 }
 
 function setConnected(connected) {
+  window.connectedState = connected;
   btnConnect.disabled = connected;
   btnDisconnect.disabled = !connected;
+  updateOperationButtons();
+}
+
+function updateOperationButtons() {
+  const imageReady = imageContext?.policy?.ok === true;
+  const caps = backend.capabilities();
+  btnProgram.disabled = !(connected && imageReady && caps.supportsFlash);
+  btnVerify.disabled = !(connected && imageReady && caps.supportsVerify);
+  btnReset.disabled = !(connected && caps.supportsReset);
 }
 
 function checkCompatibility() {
@@ -62,6 +80,7 @@ async function connectProbe() {
     await backend.connect();
     const probe = await backend.getProbeInfo();
     const target = await backend.getTargetInfo();
+    connected = true;
     setConnected(true);
     setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part}`);
   } catch (error) {
@@ -76,6 +95,7 @@ async function disconnectProbe() {
   } catch (error) {
     log(`Close warning: ${error.message}`);
   }
+  connected = false;
   setConnected(false);
   setStatus("Disconnected");
 }
@@ -103,22 +123,81 @@ async function onFirmwareSelected(event) {
         log(`Policy violation: ${issue}`);
       }
     }
+    updateOperationButtons();
   } catch (error) {
     imageContext = null;
     imageMapEl.textContent = "";
     imageSummary.textContent = `Image parse failed: ${error.message}`;
     log(`Image parse failed: ${error.message}`);
+    updateOperationButtons();
   }
+}
+
+async function runProgram() {
+  if (!imageContext?.policy?.ok) {
+    setStatus("Program blocked: image is missing or failed policy checks");
+    return;
+  }
+  try {
+    setStatus("Programming image...");
+    await backend.programImage(imageContext.parsed, { mode: "app-only" });
+    setStatus("Program complete");
+  } catch (error) {
+    const normalized = normalizeError(error);
+    setStatus(`Program failed (${normalized.code}): ${normalized.message}`);
+  }
+}
+
+async function runVerify() {
+  if (!imageContext?.policy?.ok) {
+    setStatus("Verify blocked: image is missing or failed policy checks");
+    return;
+  }
+  try {
+    setStatus("Verifying image...");
+    await backend.verifyImage(imageContext.parsed, { mode: "app-only" });
+    setStatus("Verify complete");
+  } catch (error) {
+    const normalized = normalizeError(error);
+    setStatus(`Verify failed (${normalized.code}): ${normalized.message}`);
+  }
+}
+
+async function runReset() {
+  try {
+    setStatus("Resetting target...");
+    await backend.reset("run");
+    setStatus("Reset complete");
+  } catch (error) {
+    const normalized = normalizeError(error);
+    setStatus(`Reset failed (${normalized.code}): ${normalized.message}`);
+  }
+}
+
+async function onBackendChanged(event) {
+  const name = event.target.value;
+  if (connected) {
+    await disconnectProbe();
+  }
+  backend = backendManager.setBackend(name);
+  log(`Backend selected: ${name}`);
+  updateOperationButtons();
 }
 
 btnConnect.addEventListener("click", connectProbe);
 btnDisconnect.addEventListener("click", disconnectProbe);
+btnProgram.addEventListener("click", runProgram);
+btnVerify.addEventListener("click", runVerify);
+btnReset.addEventListener("click", runReset);
 fileInput.addEventListener("change", onFirmwareSelected);
+backendSelect.addEventListener("change", onBackendChanged);
 
 progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);
 });
 
 if (checkCompatibility()) {
+  log(`Backend selected: ${selectedBackendName}`);
+  updateOperationButtons();
   setStatus("Ready");
 }

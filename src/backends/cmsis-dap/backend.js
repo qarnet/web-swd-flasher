@@ -1,0 +1,70 @@
+import { ProbeBackend } from "../backend-interface.js";
+import { CmsisDapWebUsbTransport } from "./transport-webusb.js";
+import { CmsisDapCore } from "./dap-core.js";
+import { AdiSession } from "./adi.js";
+import { Nrf52Target } from "./nrf52-target.js";
+import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
+
+export class CmsisDapBackend extends ProbeBackend {
+  constructor(progressBus) {
+    super();
+    this.transport = new CmsisDapWebUsbTransport();
+    this.core = new CmsisDapCore(this.transport);
+    this.adi = new AdiSession(this.core);
+    this.target = new Nrf52Target(this.adi);
+    this.flash = new Nrf52FlashProgrammer(progressBus);
+  }
+
+  async requestDevice() {
+    return this.transport.requestDevice();
+  }
+
+  async connect() {
+    await this.core.connect();
+    await this.adi.connectSwd();
+  }
+
+  async disconnect() {
+    await this.core.disconnect();
+  }
+
+  async getProbeInfo() {
+    const info = await this.core.dapInfo();
+    return {
+      backend: "cmsis-dap",
+      name: this.transport.device?.productName || "CMSIS-DAP",
+      manufacturer: this.transport.device?.manufacturerName || "Unknown",
+      transport: info.transport,
+      packetSize: info.packetSize
+    };
+  }
+
+  async getTargetInfo() {
+    return this.target.identify();
+  }
+
+  async readMemory() {
+    throw new Error("CMSIS-DAP readMemory not implemented");
+  }
+
+  async programImage(image, options) {
+    return this.flash.programImage(image, options);
+  }
+
+  async verifyImage(image, options) {
+    return this.flash.verifyImage(image, options);
+  }
+
+  async reset(mode = "run") {
+    return { mode };
+  }
+
+  capabilities() {
+    return {
+      supportsReadMemory: false,
+      supportsFlash: true,
+      supportsVerify: true,
+      supportsReset: true
+    };
+  }
+}

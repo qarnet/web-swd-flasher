@@ -23,3 +23,12 @@ test("progress bus receives backend events", async () => {
   await backend.disconnect();
   assert.deepEqual(events, ["connect", "disconnect"]);
 });
+
+test("backend manager can switch backend implementations", () => {
+  const bus = new ProgressBus();
+  const manager = new BackendManager(bus);
+  const jlink = manager.setBackend("jlink-webusb");
+  const cmsis = manager.setBackend("cmsis-dap");
+  assert.equal(jlink.capabilities().supportsFlash, true);
+  assert.equal(cmsis.capabilities().supportsVerify, true);
+});

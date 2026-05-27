@@ -19,6 +19,14 @@
       <section class="panel">
         <h2>Connection</h2>
         <div class="row">
+          <label for="backend-select">Backend</label>
+          <select id="backend-select">
+            <option value="mock">mock</option>
+            <option value="jlink-webusb">jlink-webusb</option>
+            <option value="cmsis-dap">cmsis-dap</option>
+          </select>
+        </div>
+        <div class="row">
           <button id="btn-connect" type="button">Connect Probe</button>
           <button id="btn-disconnect" type="button" disabled>Disconnect</button>
         </div>
@@ -29,6 +37,11 @@
         <h2>Firmware Image</h2>
         <div class="row">
           <input id="file-input" type="file" accept=".hex,.ihex" />
+        </div>
+        <div class="row">
+          <button id="btn-program" type="button" disabled>Program</button>
+          <button id="btn-verify" type="button" disabled>Verify</button>
+          <button id="btn-reset" type="button" disabled>Reset Run</button>
         </div>
         <p id="image-summary" class="status">No image loaded</p>
         <pre id="image-map" class="log"></pre>
