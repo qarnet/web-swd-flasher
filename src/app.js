@@ -87,7 +87,15 @@ function checkCompatibility() {
     return false;
   }
 
-  if (!navigator.usb) {
+  const usesHid = backendSelect.value === "cmsis-dap-webhid";
+  if (usesHid && !navigator.hid) {
+    compatMsg.textContent = "navigator.hid unavailable in this browser profile.";
+    compatBanner.hidden = false;
+    btnConnect.disabled = true;
+    return false;
+  }
+
+  if (!usesHid && !navigator.usb) {
     compatMsg.textContent = "navigator.usb unavailable in this browser profile.";
     compatBanner.hidden = false;
     btnConnect.disabled = true;
@@ -216,6 +224,7 @@ async function onBackendChanged(event) {
   backend = backendManager.setBackend(name);
   window.localStorage.setItem("backend-name", name);
   log(`Backend selected: ${name}`);
+  checkCompatibility();
   updateOperationButtons();
 }
 

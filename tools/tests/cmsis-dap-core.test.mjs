@@ -38,8 +38,12 @@ test("cmsis-dap connect sends setup commands", async () => {
   const t = new FakeTransport();
   const core = new CmsisDapCore(t);
   t.next.push(new Uint8Array([0x02, 0x01]));
-  t.next.push(new Uint8Array([0x04, 0x00]));
   t.next.push(new Uint8Array([0x11, 0x00]));
+  t.next.push(new Uint8Array([0x04, 0x00]));
+  t.next.push(new Uint8Array([0x13, 0x00]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
   await core.connect();
-  assert.deepEqual(t.commands, [0x02, 0x04, 0x11]);
+  assert.deepEqual(t.commands, [0x02, 0x11, 0x04, 0x13, 0x12, 0x12, 0x12]);
 });

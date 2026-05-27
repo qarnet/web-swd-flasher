@@ -5,9 +5,21 @@ export class CmsisDapCore {
 
   async connect() {
     await this.transport.open();
-    await this.sendCommand(new Uint8Array([0x02, 0x01]));
-    await this.sendCommand(new Uint8Array([0x04, 0x00, 0x00, 0x00, 0x00]));
+    const connect = await this.sendCommand(new Uint8Array([0x02, 0x01]));
+    if (connect[1] === 0) {
+      throw new Error("CMSIS-DAP connect returned no active port");
+    }
     await this.sendCommand(new Uint8Array([0x11, 0x40, 0x42, 0x0f, 0x00]));
+    await this.sendCommand(new Uint8Array([0x04, 0x02, 0x50, 0x00, 0x00]));
+    await this.sendCommand(new Uint8Array([0x13, 0x00]));
+
+    await this.sendCommand(
+      new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    );
+    await this.sendCommand(new Uint8Array([0x12, 16, 0x9e, 0xe7]));
+    await this.sendCommand(
+      new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    );
   }
 
   async disconnect() {
@@ -39,7 +51,9 @@ export class CmsisDapCore {
     const response = await this.sendCommand(new Uint8Array(payload));
     const ack = response[2] & 0x07;
     if (ack !== 0x01) {
-      throw new Error(`CMSIS-DAP transfer failed with ACK=${ack}`);
+      throw new Error(
+        `CMSIS-DAP transfer failed with ACK=${ack} port=${port} register=0x${register.toString(16)} read=${read}`
+      );
     }
 
     if (read) {
