@@ -1,4 +1,8 @@
-const CMSIS_DAP_HID_FILTERS = [{ usagePage: 0xff00 }, { vendorId: 0x0d28 }];
+const CMSIS_DAP_HID_FILTERS = [
+  { vendorId: 0x0d28 },
+  { vendorId: 0x2e8a, productId: 0x000c },
+  { usagePage: 0xff00 }
+];
 
 export class CmsisDapWebHidTransport {
   constructor(logger = null) {
