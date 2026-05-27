@@ -21,6 +21,7 @@ const targetInfoEl = document.getElementById("target-info");
 const fileInput = document.getElementById("file-input");
 const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
+const btnFetchHex = document.getElementById("btn-fetch-hex");
 
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
@@ -142,6 +143,53 @@ async function disconnectProbe() {
   targetInfoEl.textContent = "";
 }
 
+async function onFetchHex() {
+  const url = document.getElementById("url-input").value.trim();
+  const mode = document.getElementById("flash-mode-select").value;
+  if (!url) return;
+  setStatus("Fetching hex…");
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    loadHexText(text, mode);
+  } catch (error) {
+    imageContext = null;
+    imageSummary.textContent = `Fetch failed: ${error.message}`;
+    log(`Fetch failed: ${error.message}`);
+    updateOperationButtons();
+    setStatus("Ready");
+  }
+}
+
+function loadHexText(text, mode = "app-only") {
+  try {
+    const parsed = parseIntelHexFileText(text);
+    const map = buildImageMap(parsed);
+    const policy = validateAppRange(map, mode);
+    imageContext = { parsed, map, policy, mode };
+    imageMapEl.textContent = formatImageMap(map);
+    if (policy.ok) {
+      imageSummary.textContent = `Image accepted (${parsed.byteCount} bytes, mode: ${mode}).`;
+      log(`Firmware image passed range policy checks (mode: ${mode}).`);
+    } else {
+      imageSummary.textContent = "Image rejected by range policy.";
+      for (const issue of policy.violations) {
+        log(`Policy violation: ${issue}`);
+      }
+    }
+    updateOperationButtons();
+    setStatus("Ready");
+  } catch (error) {
+    imageContext = null;
+    imageMapEl.textContent = "";
+    imageSummary.textContent = `Image parse failed: ${error.message}`;
+    log(`Image parse failed: ${error.message}`);
+    updateOperationButtons();
+    setStatus("Ready");
+  }
+}
+
 async function onFirmwareSelected(event) {
   const file = event.target.files?.[0];
   if (!file) {
@@ -150,27 +198,12 @@ async function onFirmwareSelected(event) {
 
   try {
     const text = await file.text();
-    const parsed = parseIntelHexFileText(text);
-    const map = buildImageMap(parsed);
-    const policy = validateAppRange(map);
-    imageContext = { parsed, map, policy };
-
-    imageMapEl.textContent = formatImageMap(map);
-    if (policy.ok) {
-      imageSummary.textContent = `Image accepted (${parsed.byteCount} bytes).`;
-      log("Firmware image passed range policy checks.");
-    } else {
-      imageSummary.textContent = "Image rejected by range policy.";
-      for (const issue of policy.violations) {
-        log(`Policy violation: ${issue}`);
-      }
-    }
-    updateOperationButtons();
+    const mode = document.getElementById("flash-mode-select").value;
+    loadHexText(text, mode);
   } catch (error) {
     imageContext = null;
-    imageMapEl.textContent = "";
-    imageSummary.textContent = `Image parse failed: ${error.message}`;
-    log(`Image parse failed: ${error.message}`);
+    imageSummary.textContent = `File read failed: ${error.message}`;
+    log(`File read failed: ${error.message}`);
     updateOperationButtons();
   }
 }
@@ -240,6 +273,7 @@ btnProgram.addEventListener("click", runProgram);
 btnVerify.addEventListener("click", runVerify);
 btnReset.addEventListener("click", runReset);
 fileInput.addEventListener("change", onFirmwareSelected);
+btnFetchHex.addEventListener("click", onFetchHex);
 backendSelect.addEventListener("change", onBackendChanged);
 chkConfirmProgram.addEventListener("change", updateOperationButtons);
 

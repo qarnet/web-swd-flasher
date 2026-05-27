@@ -39,6 +39,12 @@
         <h2>Firmware Image</h2>
         <div class="row">
           <input id="file-input" type="file" accept=".hex,.ihex" />
+          <input id="url-input" type="text" placeholder="or fetch .hex URL…" value="test-blinky.hex" />
+          <select id="flash-mode-select">
+            <option value="app-only">App only (0x26000+)</option>
+            <option value="full-flash" selected>Full flash (0x0+)</option>
+          </select>
+          <button id="btn-fetch-hex" type="button">Fetch</button>
         </div>
         <div class="row">
           <button id="btn-program" type="button" disabled>Program</button>

@@ -107,16 +107,132 @@ export class CmsisDapCore {
   async sendCommand(payload) {
     this.debug("tx", { cmd: payload[0], bytes: Array.from(payload.slice(0, Math.min(12, payload.length))) });
     await this.transport.write(payload);
-    const response = await this.transport.read();
-    this.debug("rx", { cmd: response[0], bytes: Array.from(response.slice(0, Math.min(12, response.length))) });
-    if (response[0] !== payload[0]) {
-      throw new Error(`CMSIS-DAP response mismatch for command 0x${payload[0].toString(16)}`);
+    const expectedCmd = payload[0];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await this.transport.read();
+      this.debug("rx", { cmd: response[0], bytes: Array.from(response.slice(0, Math.min(12, response.length))) });
+      if (response[0] === expectedCmd) {
+        return response;
+      }
+      this.debug("stale-response", { expected: expectedCmd, got: response[0], attempt });
     }
-    return response;
+    throw new Error(`CMSIS-DAP response mismatch for command 0x${expectedCmd.toString(16)}`);
   }
 
   async lineReset() {
     await this.sendCommand(new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
     await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+  }
+
+  async transferBlockWrite(port, register, values) {
+    const count = values.length;
+    if (count === 0 || count > 65535) {
+      throw new Error(`transferBlockWrite: invalid count ${count}`);
+    }
+    const request = (port === "ap" ? 0x01 : 0x00) | 0x00 | (register & 0x0c);
+    const payloadSize = 5 + count * 4;
+    if (payloadSize > this.transport.packetSize) {
+      throw new Error(`transferBlockWrite: ${count} words exceeds packet size ${this.transport.packetSize}`);
+    }
+    const payload = new Uint8Array(this.transport.packetSize);
+    payload[0] = 0x06;
+    payload[1] = 0x00;
+    payload[2] = count & 0xff;
+    payload[3] = (count >>> 8) & 0xff;
+    payload[4] = request;
+    for (let i = 0; i < count; i += 1) {
+      const offset = 5 + i * 4;
+      payload[offset] = values[i] & 0xff;
+      payload[offset + 1] = (values[i] >>> 8) & 0xff;
+      payload[offset + 2] = (values[i] >>> 16) & 0xff;
+      payload[offset + 3] = (values[i] >>> 24) & 0xff;
+    }
+    this.debug("transferBlockWrite-tx", { count, register, request });
+    const response = await this.sendCommand(payload);
+    const respCount = response[1] | (response[2] << 8);
+    const respStatus = response[3] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferBlockWrite failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    return respCount;
+  }
+
+  async transferBlockRead(port, register, count) {
+    if (count === 0 || count > 65535) {
+      throw new Error(`transferBlockRead: invalid count ${count}`);
+    }
+    const request = (port === "ap" ? 0x01 : 0x00) | 0x02 | (register & 0x0c);
+    const payload = new Uint8Array(5);
+    payload[0] = 0x06;
+    payload[1] = 0x00;
+    payload[2] = count & 0xff;
+    payload[3] = (count >>> 8) & 0xff;
+    payload[4] = request;
+    this.debug("transferBlockRead-tx", { count, register, request });
+    const response = await this.sendCommand(payload);
+    const respCount = response[1] | (response[2] << 8);
+    const respStatus = response[3] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferBlockRead failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    const result = new Uint32Array(respCount);
+    for (let i = 0; i < respCount; i += 1) {
+      const offset = 4 + i * 4;
+      result[i] = ((response[offset] | (response[offset + 1] << 8) | (response[offset + 2] << 16) | (response[offset + 3] << 24)) >>> 0);
+    }
+    return result;
+  }
+
+  async transferMultiple(operations) {
+    const packetSize = this.transport.packetSize;
+    let payloadLen = 3;
+    for (const op of operations) {
+      payloadLen += 1;
+      if (op.value !== null && op.value !== undefined) {
+        payloadLen += 4;
+      }
+    }
+    if (payloadLen > packetSize) {
+      throw new Error(`transferMultiple: ${operations.length} operations exceed packet size ${packetSize}`);
+    }
+    const payload = new Uint8Array(Math.max(payloadLen, packetSize));
+    payload[0] = 0x05;
+    payload[1] = 0x00;
+    payload[2] = operations.length;
+    let offset = 3;
+    for (const op of operations) {
+      const isAp = op.port === "ap";
+      const isRead = op.value === null || op.value === undefined;
+      const req = (isAp ? 0x01 : 0x00) | (isRead ? 0x02 : 0x00) | (op.register & 0x0c);
+      payload[offset] = req;
+      offset += 1;
+      if (!isRead) {
+        payload[offset] = op.value & 0xff;
+        payload[offset + 1] = (op.value >>> 8) & 0xff;
+        payload[offset + 2] = (op.value >>> 16) & 0xff;
+        payload[offset + 3] = (op.value >>> 24) & 0xff;
+        offset += 4;
+      }
+    }
+    const response = await this.sendCommand(payload.slice(0, Math.max(payloadLen, packetSize)));
+    const respCount = response[1];
+    const respStatus = response[2] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferMultiple failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    if (respCount !== operations.length) {
+      throw new Error(`transferMultiple: expected ${operations.length} transfers, got ${respCount}`);
+    }
+    const reads = [];
+    let readOffset = 3;
+    for (const op of operations) {
+      const isRead = op.value === null || op.value === undefined;
+      if (isRead) {
+        const val = ((response[readOffset] | (response[readOffset + 1] << 8) | (response[readOffset + 2] << 16) | (response[readOffset + 3] << 24)) >>> 0);
+        reads.push(val);
+        readOffset += 4;
+      }
+    }
+    return reads;
   }
 }

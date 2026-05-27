@@ -4,10 +4,11 @@ export const NRF52840_UICR_BASE = 0x10001000;
 export const NRF52_DEFAULT_APP_START = 0x00026000;
 export const NRF52_DEFAULT_APP_END = NRF52840_FLASH_BASE + NRF52840_FLASH_SIZE - 1;
 
-export function validateAppRange(imageMap) {
+export function validateAppRange(imageMap, mode = "app-only") {
   const violations = [];
+  const allowStart = mode === "full-flash" ? 0 : NRF52_DEFAULT_APP_START;
   for (const segment of imageMap.segments) {
-    if (segment.start < NRF52_DEFAULT_APP_START) {
+    if (segment.start < allowStart) {
       violations.push(
         `segment starts below allowed app flash at 0x${segment.start.toString(16).padStart(8, "0")}`
       );

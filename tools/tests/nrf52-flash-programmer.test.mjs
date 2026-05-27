@@ -6,6 +6,8 @@ class FakeAdi {
   constructor() {
     this.mem = new Map();
     this.writes = [];
+    this.blockWrites = [];
+    this.blockReads = [];
   }
 
   async readMem32(addr) {
@@ -18,6 +20,30 @@ class FakeAdi {
   async writeMem32(addr, value) {
     this.writes.push({ addr, value });
     this.mem.set(addr, value >>> 0);
+  }
+
+  get maxBlockWordCount() {
+    return 14;
+  }
+
+  get maxReadBlockWordCount() {
+    return 15;
+  }
+
+  async writeMemBlockFast(address, words) {
+    this.blockWrites.push({ address, words: Array.from(words) });
+    for (let i = 0; i < words.length; i += 1) {
+      this.mem.set(address + i * 4, words[i]);
+    }
+  }
+
+  async readMemBlockFast(address, wordCount) {
+    this.blockReads.push({ address, wordCount });
+    const result = new Uint32Array(wordCount);
+    for (let i = 0; i < wordCount; i += 1) {
+      result[i] = this.mem.get(address + i * 4) ?? 0xffffffff;
+    }
+    return result;
   }
 }
 
@@ -55,4 +81,26 @@ test("flash verify validates programmed content", async () => {
   adi.mem.set(0x00026000, 0x44332211);
   adi.mem.set(0x00026010, 0xffffffaa);
   await flasher.verifyImage(image);
+});
+
+test("flash programmer uses block writes when available", async () => {
+  const adi = new FakeAdi();
+  const bus = { emit() {} };
+  const flasher = new Nrf52FlashProgrammer(bus, adi);
+  const image = makeImage();
+  await flasher.programImage(image);
+  assert.ok(adi.blockWrites.length > 0, "expected block writes to be used");
+  const firstWord = adi.mem.get(0x00026000);
+  assert.equal(firstWord, 0x44332211);
+});
+
+test("flash verify uses block reads when available", async () => {
+  const adi = new FakeAdi();
+  const bus = { emit() {} };
+  const flasher = new Nrf52FlashProgrammer(bus, adi);
+  const image = makeImage();
+  adi.mem.set(0x00026000, 0x44332211);
+  adi.mem.set(0x00026010, 0xffffffaa);
+  await flasher.verifyImage(image);
+  assert.ok(adi.blockReads.length > 0, "expected block reads to be used");
 });

@@ -73,4 +73,47 @@ export class AdiSession {
       current += 4;
     }
   }
+
+  get maxBlockWordCount() {
+    const packetSize = this.dapCore.transport.packetSize;
+    return Math.max(1, Math.floor((packetSize - 5) / 4));
+  }
+
+  get maxReadBlockWordCount() {
+    const packetSize = this.dapCore.transport.packetSize;
+    return Math.max(1, Math.floor((packetSize - 4) / 4));
+  }
+
+  async writeMemBlockFast(address, words) {
+    const maxWords = this.maxBlockWordCount;
+    let offset = 0;
+    while (offset < words.length) {
+      const chunk = words.slice(offset, offset + maxWords);
+      await this.selectAp(0, 0);
+      await this.dapCore.transferMultiple([
+        { port: "ap", register: 0x00, value: 0x23000052 },
+        { port: "ap", register: 0x04, value: (address + offset * 4) >>> 0 }
+      ]);
+      await this.dapCore.transferBlockWrite("ap", 0x0c, Array.from(chunk));
+      offset += chunk.length;
+    }
+  }
+
+  async readMemBlockFast(address, wordCount) {
+    const maxReadWords = this.maxReadBlockWordCount;
+    const result = [];
+    let offset = 0;
+    while (offset < wordCount) {
+      const count = Math.min(maxReadWords, wordCount - offset);
+      await this.selectAp(0, 0);
+      await this.dapCore.transferMultiple([
+        { port: "ap", register: 0x00, value: 0x23000052 },
+        { port: "ap", register: 0x04, value: (address + offset * 4) >>> 0 }
+      ]);
+      const chunk = await this.dapCore.transferBlockRead("ap", 0x0c, count);
+      result.push(...chunk);
+      offset += count;
+    }
+    return new Uint32Array(result);
+  }
 }

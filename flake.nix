@@ -17,7 +17,6 @@
             git
             gnumake
             nodejs_22
-            python3
             xvfb
             chromium
           ];
