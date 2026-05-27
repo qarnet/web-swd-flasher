@@ -8,6 +8,6 @@ export class AdiSession {
   }
 
   async readDpidr() {
-    return 0x2ba01477;
+    return this.dapCore.transfer("dp", 0x00, null);
   }
 }

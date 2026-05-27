@@ -7,7 +7,7 @@ export class Nrf52Target {
     const dpidr = await this.adiSession.readDpidr();
     return {
       family: "nRF52",
-      part: "nRF52840 (assumed)",
+      part: "nRF52 (probe-level detect)",
       dpidr: `0x${dpidr.toString(16)}`
     };
   }

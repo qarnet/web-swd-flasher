@@ -65,12 +65,18 @@ export class CmsisDapWebUsbTransport {
   }
 
   async write(frame) {
+    if (this.endpointOut === null) {
+      throw new Error("CMSIS-DAP transport not open");
+    }
     const data = new Uint8Array(this.packetSize);
     data.set(frame.slice(0, this.packetSize));
     await this.device.transferOut(this.endpointOut, data);
   }
 
   async read(length = this.packetSize) {
+    if (this.endpointIn === null) {
+      throw new Error("CMSIS-DAP transport not open");
+    }
     const result = await this.device.transferIn(this.endpointIn, length);
     return new Uint8Array(result.data.buffer, result.data.byteOffset, result.data.byteLength);
   }
