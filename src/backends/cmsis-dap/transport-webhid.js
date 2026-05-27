@@ -31,6 +31,10 @@ export class CmsisDapWebHidTransport {
       throw new Error("No HID device selected");
     }
     this.device = picked[0];
+    const hasHidCollection = (this.device.collections || []).length > 0;
+    if (!hasHidCollection) {
+      throw new Error("Selected device has no HID collections");
+    }
     this.debug("requestDevice-selected", { vendorId: this.device.vendorId, productId: this.device.productId, productName: this.device.productName });
     return this.device;
   }

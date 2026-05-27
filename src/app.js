@@ -224,6 +224,12 @@ async function onBackendChanged(event) {
   backend = backendManager.setBackend(name);
   window.localStorage.setItem("backend-name", name);
   log(`Backend selected: ${name}`);
+  if (name === "jlink-webusb") {
+    log("Note: J-Link requires WebUSB in this app; WebHID is not supported for J-Link debug transport.");
+  }
+  if (name === "cmsis-dap-webhid") {
+    log("Note: CMSIS-DAP WebHID can open without target wiring, but SWD operations require SWDIO/SWDCLK/RESET wiring and target power.");
+  }
   checkCompatibility();
   updateOperationButtons();
 }
