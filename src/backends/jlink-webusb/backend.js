@@ -4,9 +4,9 @@ import { JLinkWebUsbClient } from "./client.js";
 import { JLinkWebUsbFlasher } from "./flasher.js";
 
 export class JLinkWebUsbBackend extends ProbeBackend {
-  constructor(progressBus) {
+  constructor(progressBus, logger = null) {
     super();
-    this.transport = new JLinkWebUsbTransport();
+    this.transport = new JLinkWebUsbTransport(logger);
     this.client = new JLinkWebUsbClient(this.transport);
     this.flasher = new JLinkWebUsbFlasher(this.client, progressBus);
   }

@@ -1,21 +1,58 @@
 const JLINK_FILTERS = [{ vendorId: 0x1366 }];
 
 export class JLinkWebUsbTransport {
-  constructor() {
+  constructor(logger = null) {
     this.device = null;
     this.interfaceNumber = null;
     this.endpointIn = null;
     this.endpointOut = null;
+    this.log = logger;
+  }
+
+  debug(message, payload = null) {
+    if (this.log) {
+      this.log(`[jlink-webusb] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`);
+    }
+  }
+
+  async diagnoseClaimFailures() {
+    if (!this.device?.configuration) {
+      return;
+    }
+    for (const iface of this.device.configuration.interfaces) {
+      const n = iface.interfaceNumber;
+      try {
+        await this.device.claimInterface(n);
+        this.debug("diagnose-claim-ok", { interfaceNumber: n });
+        try {
+          await this.device.releaseInterface(n);
+        } catch (err) {
+          this.debug("diagnose-release-failed", {
+            interfaceNumber: n,
+            name: err?.name,
+            message: err?.message
+          });
+        }
+      } catch (err) {
+        this.debug("diagnose-claim-failed", {
+          interfaceNumber: n,
+          name: err?.name,
+          message: err?.message
+        });
+      }
+    }
   }
 
   async requestDevice() {
     const known = await navigator.usb.getDevices();
+    this.debug("authorized-devices", known.map((d) => ({ vid: d.vendorId, pid: d.productId, name: d.productName })));
     const cached = known.find((dev) => dev.vendorId === 0x1366);
     if (cached) {
       this.device = cached;
       return this.device;
     }
     this.device = await navigator.usb.requestDevice({ filters: JLINK_FILTERS });
+    this.debug("requestDevice-selected", { vid: this.device.vendorId, pid: this.device.productId, name: this.device.productName });
     return this.device;
   }
 
@@ -33,9 +70,25 @@ export class JLinkWebUsbTransport {
       throw new Error("No J-Link device selected");
     }
     await this.device.open();
+    this.debug("device-opened", { opened: this.device.opened });
     if (!this.device.configuration) {
       await this.device.selectConfiguration(1);
+      this.debug("configuration-selected", { value: 1 });
     }
+
+    this.debug(
+      "interfaces",
+      this.device.configuration.interfaces.map((iface) => ({
+        interfaceNumber: iface.interfaceNumber,
+        alternates: iface.alternates.map((alt) => ({
+          alternateSetting: alt.alternateSetting,
+          classCode: alt.interfaceClass,
+          subClass: alt.interfaceSubclass,
+          protocol: alt.interfaceProtocol,
+          endpoints: alt.endpoints.map((ep) => ({ direction: ep.direction, type: ep.type, number: ep.endpointNumber, packetSize: ep.packetSize }))
+        }))
+      }))
+    );
 
     const bulkIfaces = this.device.configuration.interfaces.filter((candidate) => {
       return candidate.alternates.some((alt) => alt.endpoints.some((ep) => ep.type === "bulk"));
@@ -53,7 +106,19 @@ export class JLinkWebUsbTransport {
     }
 
     this.interfaceNumber = iface.interfaceNumber;
-    await this.device.claimInterface(this.interfaceNumber);
+    this.debug("claim-interface-attempt", { interfaceNumber: this.interfaceNumber });
+    try {
+      await this.device.claimInterface(this.interfaceNumber);
+      this.debug("claim-interface-ok", { interfaceNumber: this.interfaceNumber });
+    } catch (error) {
+      this.debug("claim-interface-failed", {
+        interfaceNumber: this.interfaceNumber,
+        name: error?.name,
+        message: error?.message
+      });
+      await this.diagnoseClaimFailures();
+      throw error;
+    }
 
     const alt =
       iface.alternates.find(
@@ -72,6 +137,7 @@ export class JLinkWebUsbTransport {
 
     this.endpointIn = inEp.endpointNumber;
     this.endpointOut = outEp.endpointNumber;
+    this.debug("endpoints-selected", { in: this.endpointIn, out: this.endpointOut });
   }
 
   async close() {
@@ -81,6 +147,7 @@ export class JLinkWebUsbTransport {
     if (this.interfaceNumber !== null) {
       try {
         await this.device.releaseInterface(this.interfaceNumber);
+        this.debug("release-interface-ok", { interfaceNumber: this.interfaceNumber });
       } catch {
         // Ignore release errors on disconnect path.
       }

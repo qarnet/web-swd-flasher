@@ -3,8 +3,9 @@ import { JLinkWebUsbBackend } from "../backends/jlink-webusb/backend.js";
 import { CmsisDapBackend } from "../backends/cmsis-dap/backend.js";
 
 export class BackendManager {
-  constructor(progressBus) {
+  constructor(progressBus, logger = null) {
     this.progressBus = progressBus;
+    this.logger = logger;
     this.current = null;
   }
 
@@ -14,11 +15,11 @@ export class BackendManager {
       return this.current;
     }
     if (name === "jlink-webusb") {
-      this.current = new JLinkWebUsbBackend(this.progressBus);
+      this.current = new JLinkWebUsbBackend(this.progressBus, this.logger);
       return this.current;
     }
     if (name === "cmsis-dap") {
-      this.current = new CmsisDapBackend(this.progressBus);
+      this.current = new CmsisDapBackend(this.progressBus, this.logger);
       return this.current;
     }
     throw new Error(`Unsupported backend: ${name}`);

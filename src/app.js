@@ -23,7 +23,7 @@ const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
 
 const progressBus = new ProgressBus();
-const backendManager = new BackendManager(progressBus);
+const backendManager = new BackendManager(progressBus, (message) => log(message));
 const backendParam = new URLSearchParams(window.location.search).get("backend");
 const storedBackendName = window.localStorage.getItem("backend-name");
 const selectedBackendName = backendParam || storedBackendName || "mock";
