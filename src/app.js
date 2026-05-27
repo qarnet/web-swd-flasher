@@ -24,7 +24,8 @@ const imageMapEl = document.getElementById("image-map");
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus);
 const backendParam = new URLSearchParams(window.location.search).get("backend");
-const selectedBackendName = backendParam || "mock";
+const storedBackendName = window.localStorage.getItem("backend-name");
+const selectedBackendName = backendParam || storedBackendName || "mock";
 backendSelect.value = selectedBackendName;
 let backend = backendManager.getBackend(selectedBackendName);
 let imageContext = null;
@@ -190,6 +191,7 @@ async function onBackendChanged(event) {
     await disconnectProbe();
   }
   backend = backendManager.setBackend(name);
+  window.localStorage.setItem("backend-name", name);
   log(`Backend selected: ${name}`);
   updateOperationButtons();
 }
