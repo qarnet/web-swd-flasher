@@ -1,8 +1,4 @@
-const CMSIS_DAP_HID_FILTERS = [
-  { vendorId: 0x0d28 },
-  { vendorId: 0x2e8a, productId: 0x000c },
-  { usagePage: 0xff00 }
-];
+const CMSIS_DAP_HID_FILTERS = [];
 
 export class CmsisDapWebHidTransport {
   constructor(logger = null) {
@@ -25,12 +21,11 @@ export class CmsisDapWebHidTransport {
   async requestDevice() {
     const known = await navigator.hid.getDevices();
     this.debug("authorized-devices", known.map((d) => ({ vendorId: d.vendorId, productId: d.productId, productName: d.productName })));
-    const cached = known.find((d) => d.vendorId === 0x0d28);
-    if (cached) {
-      this.device = cached;
-      return cached;
+    if (known.length === 1) {
+      this.device = known[0];
+      return known[0];
     }
-    const picked = await navigator.hid.requestDevice({ filters: CMSIS_DAP_HID_FILTERS });
+    const picked = await navigator.hid.requestDevice({ filters: [] });
     if (!picked.length) {
       throw new Error("No HID device selected");
     }

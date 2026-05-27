@@ -47,3 +47,15 @@ test("cmsis-dap connect sends setup commands", async () => {
   await core.connect();
   assert.deepEqual(t.commands, [0x02, 0x11, 0x04, 0x13, 0x12, 0x12, 0x12]);
 });
+
+test("cmsis-dap transfer retries wait/noack", async () => {
+  const t = new FakeTransport();
+  const core = new CmsisDapCore(t);
+  t.next.push(new Uint8Array([0x05, 0x01, 0x07, 0, 0, 0, 0]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
+  t.next.push(new Uint8Array([0x12, 0x00]));
+  t.next.push(new Uint8Array([0x05, 0x01, 0x01, 0x34, 0x12, 0x00, 0x00]));
+  const value = await core.transfer("dp", 0x00, null);
+  assert.equal(value, 0x1234);
+});

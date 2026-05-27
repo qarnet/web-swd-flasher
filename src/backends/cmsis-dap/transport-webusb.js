@@ -1,4 +1,7 @@
-const CMSIS_DAP_FILTERS = [{ vendorId: 0x0d28 }];
+const CMSIS_DAP_FILTERS = [
+  { vendorId: 0x0d28 },
+  { vendorId: 0x2e8a, productId: 0x000c }
+];
 
 export class CmsisDapWebUsbTransport {
   constructor(logger = null) {
@@ -47,7 +50,8 @@ export class CmsisDapWebUsbTransport {
   async requestDevice() {
     const known = await navigator.usb.getDevices();
     this.debug("authorized-devices", known.map((d) => ({ vid: d.vendorId, pid: d.productId, name: d.productName })));
-    const cached = known.find((dev) => dev.vendorId === 0x0d28);
+    const vids = CMSIS_DAP_FILTERS.map((f) => f.vendorId);
+    const cached = known.find((dev) => vids.includes(dev.vendorId));
     if (cached) {
       this.device = cached;
       return this.device;

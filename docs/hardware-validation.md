@@ -3,6 +3,25 @@
 This project depends on real USB probe behavior. Use this checklist for milestone
 validation on a connected nRF52840 DK.
 
+## Windows driver setup (Zadig)
+
+On Windows, the OS claims USB interfaces with class drivers (CDC, HID) that block
+Chrome's `claimInterface()`. Use [Zadig](https://zadig.akeo.ie/) to replace the
+driver on the CMSIS-DAP bulk interface with WinUSB:
+
+1. Connect the Pico Debugprobe via USB.
+2. Download and run Zadig from https://zadig.akeo.ie/.
+3. Click **Options → List All Devices**.
+4. Select **"Picoprobe CMSIS-DAP v2 (Interface 0)"** from the dropdown.
+5. Set the driver to **WinUSB**.
+6. Click **Replace Driver** and wait for completion.
+
+After this, Chrome WebUSB can claim Interface 0 (the bulk CMSIS-DAP endpoint)
+on the Pico Debugprobe. The CDC serial interface remains untouched.
+
+> **Warning**: Do NOT replace drivers on all interfaces — only Interface 0.
+> Replacing the CDC driver will break the serial console function.
+
 ## Preconditions
 
 1. DK attached to WSL2 via `usbipd`.
