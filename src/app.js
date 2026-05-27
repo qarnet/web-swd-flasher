@@ -14,6 +14,7 @@ const btnProgram = document.getElementById("btn-program");
 const btnVerify = document.getElementById("btn-verify");
 const btnReset = document.getElementById("btn-reset");
 const backendSelect = document.getElementById("backend-select");
+const chkConfirmProgram = document.getElementById("chk-confirm-program");
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
 const fileInput = document.getElementById("file-input");
@@ -49,9 +50,10 @@ function setConnected(connected) {
 
 function updateOperationButtons() {
   const imageReady = imageContext?.policy?.ok === true;
+  const confirmed = chkConfirmProgram.checked;
   const caps = backend.capabilities();
-  btnProgram.disabled = !(connected && imageReady && caps.supportsFlash);
-  btnVerify.disabled = !(connected && imageReady && caps.supportsVerify);
+  btnProgram.disabled = !(connected && imageReady && confirmed && caps.supportsFlash);
+  btnVerify.disabled = !(connected && imageReady && confirmed && caps.supportsVerify);
   btnReset.disabled = !(connected && caps.supportsReset);
 }
 
@@ -199,6 +201,7 @@ btnVerify.addEventListener("click", runVerify);
 btnReset.addEventListener("click", runReset);
 fileInput.addEventListener("change", onFirmwareSelected);
 backendSelect.addEventListener("change", onBackendChanged);
+chkConfirmProgram.addEventListener("change", updateOperationButtons);
 
 progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);
