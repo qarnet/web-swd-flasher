@@ -37,9 +37,16 @@ export class JLinkWebUsbTransport {
       await this.device.selectConfiguration(1);
     }
 
-    const iface = this.device.configuration.interfaces.find((candidate) => {
+    const bulkIfaces = this.device.configuration.interfaces.filter((candidate) => {
       return candidate.alternates.some((alt) => alt.endpoints.some((ep) => ep.type === "bulk"));
     });
+
+    const iface =
+      bulkIfaces.find((candidate) =>
+        candidate.alternates.some(
+          (alt) => alt.interfaceClass === 0xff && alt.interfaceSubclass === 0xff && alt.interfaceProtocol === 0xff
+        )
+      ) || bulkIfaces[0];
 
     if (!iface) {
       throw new Error("No bulk interface found on selected J-Link device");
@@ -48,7 +55,14 @@ export class JLinkWebUsbTransport {
     this.interfaceNumber = iface.interfaceNumber;
     await this.device.claimInterface(this.interfaceNumber);
 
-    const alt = iface.alternates.find((candidate) => candidate.endpoints.some((ep) => ep.type === "bulk"));
+    const alt =
+      iface.alternates.find(
+        (candidate) =>
+          candidate.endpoints.some((ep) => ep.type === "bulk") &&
+          candidate.interfaceClass === 0xff &&
+          candidate.interfaceSubclass === 0xff &&
+          candidate.interfaceProtocol === 0xff
+      ) || iface.alternates.find((candidate) => candidate.endpoints.some((ep) => ep.type === "bulk"));
     const inEp = alt.endpoints.find((ep) => ep.direction === "in" && ep.type === "bulk");
     const outEp = alt.endpoints.find((ep) => ep.direction === "out" && ep.type === "bulk");
 
