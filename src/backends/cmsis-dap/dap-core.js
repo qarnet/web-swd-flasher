@@ -1,6 +1,7 @@
 export class CmsisDapCore {
-  constructor(transport) {
+  constructor(transport, swdClockHz = 1000000) {
     this.transport = transport;
+    this.swdClockHz = swdClockHz;
   }
 
   debug(message, payload = null) {
@@ -16,7 +17,10 @@ export class CmsisDapCore {
     if (connect[1] === 0) {
       throw new Error("CMSIS-DAP connect returned no active port");
     }
-    await this.sendCommand(new Uint8Array([0x11, 0xa0, 0x86, 0x01, 0x00]));
+    const clockHz = this.swdClockHz;
+    const clockBytes = [(clockHz & 0xff), ((clockHz >>> 8) & 0xff), ((clockHz >>> 16) & 0xff), ((clockHz >>> 24) & 0xff)];
+    await this.sendCommand(new Uint8Array([0x11, ...clockBytes]));
+    this.debug("swd-clock-set", { hz: clockHz });
     await this.sendCommand(new Uint8Array([0x04, 0x02, 0x50, 0x00, 0x00]));
     await this.sendCommand(new Uint8Array([0x13, 0x00]));
     await this.swjSwitchToSwd();
@@ -124,8 +128,7 @@ export class CmsisDapCore {
     await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
   }
 
-  async transferBlockWrite(port, register, values) {
-    const count = values.length;
+  async transferBlockWrite(port, register, values, count = values.length, offset = 0) {
     if (count === 0 || count > 65535) {
       throw new Error(`transferBlockWrite: invalid count ${count}`);
     }
@@ -140,12 +143,9 @@ export class CmsisDapCore {
     payload[2] = count & 0xff;
     payload[3] = (count >>> 8) & 0xff;
     payload[4] = request;
+    const dataView = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
     for (let i = 0; i < count; i += 1) {
-      const offset = 5 + i * 4;
-      payload[offset] = values[i] & 0xff;
-      payload[offset + 1] = (values[i] >>> 8) & 0xff;
-      payload[offset + 2] = (values[i] >>> 16) & 0xff;
-      payload[offset + 3] = (values[i] >>> 24) & 0xff;
+      dataView.setUint32(5 + i * 4, values[offset + i], true);
     }
     this.debug("transferBlockWrite-tx", { count, register, request });
     const response = await this.sendCommand(payload);

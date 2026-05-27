@@ -22,6 +22,8 @@ const fileInput = document.getElementById("file-input");
 const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
 const btnFetchHex = document.getElementById("btn-fetch-hex");
+const btnLoadBuiltin = document.getElementById("btn-load-builtin");
+const clockSelect = document.getElementById("clock-select");
 
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
@@ -108,6 +110,8 @@ function checkCompatibility() {
 }
 
 async function connectProbe() {
+  const name = backendSelect.value;
+  backend = backendManager.setBackend(name);
   try {
     const known = await backend.getAuthorizedDevices();
     if (known.length > 0) {
@@ -157,6 +161,23 @@ async function onFetchHex() {
     imageContext = null;
     imageSummary.textContent = `Fetch failed: ${error.message}`;
     log(`Fetch failed: ${error.message}`);
+    updateOperationButtons();
+    setStatus("Ready");
+  }
+}
+
+async function onLoadBuiltin() {
+  const mode = document.getElementById("flash-mode-select").value;
+  setStatus("Loading built-in firmware…");
+  try {
+    const response = await fetch("test-blinky.hex");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    loadHexText(text, mode);
+  } catch (error) {
+    imageContext = null;
+    imageSummary.textContent = `Built-in load failed: ${error.message}`;
+    log(`Built-in load failed: ${error.message}`);
     updateOperationButtons();
     setStatus("Ready");
   }
@@ -267,6 +288,15 @@ async function onBackendChanged(event) {
   updateOperationButtons();
 }
 
+function onClockChanged() {
+  const hz = parseInt(clockSelect.value, 10);
+  backendManager.setSwdClockHz(hz);
+  log(`SWD clock set to ${hz / 1000} kHz`);
+  if (connected) {
+    log("SWD clock change will take effect on next connect.");
+  }
+}
+
 btnConnect.addEventListener("click", connectProbe);
 btnDisconnect.addEventListener("click", disconnectProbe);
 btnProgram.addEventListener("click", runProgram);
@@ -274,7 +304,9 @@ btnVerify.addEventListener("click", runVerify);
 btnReset.addEventListener("click", runReset);
 fileInput.addEventListener("change", onFirmwareSelected);
 btnFetchHex.addEventListener("click", onFetchHex);
+btnLoadBuiltin.addEventListener("click", onLoadBuiltin);
 backendSelect.addEventListener("change", onBackendChanged);
+clockSelect.addEventListener("change", onClockChanged);
 chkConfirmProgram.addEventListener("change", updateOperationButtons);
 
 progressBus.subscribe((event) => {

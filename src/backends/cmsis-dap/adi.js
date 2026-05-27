@@ -84,36 +84,39 @@ export class AdiSession {
     return Math.max(1, Math.floor((packetSize - 4) / 4));
   }
 
-  async writeMemBlockFast(address, words) {
+  async writeMemBlockFast(address, words, offset = 0, count = words.length - offset) {
     const maxWords = this.maxBlockWordCount;
-    let offset = 0;
-    while (offset < words.length) {
-      const chunk = words.slice(offset, offset + maxWords);
-      await this.selectAp(0, 0);
+    let pos = offset;
+    let addr = address >>> 0;
+    const end = offset + count;
+    while (pos < end) {
+      const chunkSize = Math.min(maxWords, end - pos);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },
-        { port: "ap", register: 0x04, value: (address + offset * 4) >>> 0 }
+        { port: "ap", register: 0x04, value: addr }
       ]);
-      await this.dapCore.transferBlockWrite("ap", 0x0c, Array.from(chunk));
-      offset += chunk.length;
+      await this.dapCore.transferBlockWrite("ap", 0x0c, words, chunkSize, pos);
+      pos += chunkSize;
+      addr += chunkSize * 4;
     }
   }
 
   async readMemBlockFast(address, wordCount) {
     const maxReadWords = this.maxReadBlockWordCount;
-    const result = [];
+    const result = new Uint32Array(wordCount);
     let offset = 0;
+    let addr = address >>> 0;
     while (offset < wordCount) {
       const count = Math.min(maxReadWords, wordCount - offset);
-      await this.selectAp(0, 0);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },
-        { port: "ap", register: 0x04, value: (address + offset * 4) >>> 0 }
+        { port: "ap", register: 0x04, value: addr }
       ]);
       const chunk = await this.dapCore.transferBlockRead("ap", 0x0c, count);
-      result.push(...chunk);
+      result.set(chunk, offset);
       offset += count;
+      addr += count * 4;
     }
-    return new Uint32Array(result);
+    return result;
   }
 }

@@ -103,22 +103,11 @@ export class Nrf52FlashProgrammer {
 
       if (useBlockWrite) {
         const words = this.buildWordArray(image, seg.start, seg.end);
-        const maxChunk = this.adi.maxBlockWordCount;
-        let offset = 0;
-        while (offset < segWordCount) {
-          const chunkSize = Math.min(maxChunk, segWordCount - offset);
-          const chunk = words.slice(offset, offset + chunkSize);
-          await this.adi.writeMemBlockFast(seg.start + offset * 4, chunk);
-          writtenWords += chunkSize;
-          offset += chunkSize;
-          if (writtenWords % 256 === 0 || writtenWords === totalWords) {
-            const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
-            this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
-          }
-          if (writtenWords % 1024 === 0) {
-            await this.waitReady();
-          }
-        }
+        await this.adi.selectAp(0, 0);
+        await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount);
+        writtenWords += segWordCount;
+        const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
+        this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
       } else {
         let currentAddr = seg.start;
         while (currentAddr <= seg.end) {

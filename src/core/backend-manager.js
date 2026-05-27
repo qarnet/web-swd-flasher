@@ -8,6 +8,11 @@ export class BackendManager {
     this.progressBus = progressBus;
     this.logger = logger;
     this.current = null;
+    this.swdClockHz = 1000000;
+  }
+
+  setSwdClockHz(hz) {
+    this.swdClockHz = hz;
   }
 
   setBackend(name) {
@@ -20,7 +25,7 @@ export class BackendManager {
       return this.current;
     }
     if (name === "cmsis-dap") {
-      this.current = new CmsisDapBackend(this.progressBus, this.logger);
+      this.current = new CmsisDapBackend(this.progressBus, this.logger, this.swdClockHz);
       return this.current;
     }
     if (name === "cmsis-dap-webhid") {

@@ -23,8 +23,16 @@
           <select id="backend-select">
             <option value="mock">mock</option>
             <option value="jlink-webusb">jlink-webusb</option>
-            <option value="cmsis-dap">cmsis-dap</option>
+            <option value="cmsis-dap" selected>cmsis-dap</option>
             <option value="cmsis-dap-webhid">cmsis-dap-webhid</option>
+          </select>
+          <label for="clock-select">SWD Clock</label>
+          <select id="clock-select">
+            <option value="100000">100 kHz</option>
+            <option value="500000">500 kHz</option>
+            <option value="1000000" selected>1 MHz</option>
+            <option value="2000000">2 MHz</option>
+            <option value="4000000">4 MHz</option>
           </select>
         </div>
         <div class="row">
@@ -45,6 +53,7 @@
             <option value="full-flash" selected>Full flash (0x0+)</option>
           </select>
           <button id="btn-fetch-hex" type="button">Fetch</button>
+          <button id="btn-load-builtin" type="button">Load Blinky</button>
         </div>
         <div class="row">
           <button id="btn-program" type="button" disabled>Program</button>

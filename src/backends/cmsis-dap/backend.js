@@ -6,10 +6,10 @@ import { Nrf52Target } from "./nrf52-target.js";
 import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
 
 export class CmsisDapBackend extends ProbeBackend {
-  constructor(progressBus, logger = null) {
+  constructor(progressBus, logger = null, swdClockHz = 1000000) {
     super();
     this.transport = new CmsisDapWebUsbTransport(logger);
-    this.core = new CmsisDapCore(this.transport);
+    this.core = new CmsisDapCore(this.transport, swdClockHz);
     this.adi = new AdiSession(this.core);
     this.target = new Nrf52Target(this.adi);
     this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);

@@ -10,6 +10,8 @@ class FakeAdi {
     this.blockReads = [];
   }
 
+  async selectAp() {}
+
   async readMem32(addr) {
     if (addr === Nrf52FlashProgrammer.NVMC_READY) {
       return 1;
@@ -30,10 +32,10 @@ class FakeAdi {
     return 15;
   }
 
-  async writeMemBlockFast(address, words) {
-    this.blockWrites.push({ address, words: Array.from(words) });
-    for (let i = 0; i < words.length; i += 1) {
-      this.mem.set(address + i * 4, words[i]);
+  async writeMemBlockFast(address, words, offset = 0, count = words.length - offset) {
+    this.blockWrites.push({ address, offset, count, words: Array.from(words.slice(offset, offset + count)) });
+    for (let i = 0; i < count; i += 1) {
+      this.mem.set(address + i * 4, words[offset + i]);
     }
   }
 
