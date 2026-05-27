@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Web SWD Flasher</title>
+    <link rel="stylesheet" href="styles/base.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Web SWD Flasher</h1>
+      <p class="sub">nRF52 flashing over USB debug probes</p>
+
+      <section id="compat-banner" class="banner" hidden>
+        <strong>WebUSB unavailable:</strong>
+        <span id="compat-msg"></span>
+      </section>
+
+      <section class="panel">
+        <h2>Connection</h2>
+        <div class="row">
+          <button id="btn-connect" type="button">Connect Probe</button>
+          <button id="btn-disconnect" type="button" disabled>Disconnect</button>
+        </div>
+        <p id="status" class="status">Idle</p>
+      </section>
+
+      <section class="panel">
+        <h2>Event Log</h2>
+        <pre id="log" class="log"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>

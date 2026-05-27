@@ -22,6 +22,7 @@ This register tracks MVP and near-term risks for browser-based nRF flashing over
 | R-008 | Weak error taxonomy leads to poor operator recovery | Medium | Medium | Medium | Normalize backend errors into shared codes/messages; include probable cause + next action per error | Users cannot distinguish permission/driver/target-lock failures | Project | Open |
 | R-009 | Interrupted USB session during erase/program leaves unknown target state | Medium | High | High | Write in verified chunks; detect partial completion; require explicit retry flow; always re-read target state after reconnect | Disconnect or transfer timeout during flash sequence | Project | Open |
 | R-010 | Target protection states (for example APPROTECT) block expected flows | Medium | Medium | Medium | Detect lock/protection early and provide explicit unsupported-path messaging for MVP | Connect succeeds, memory operations fail with protection faults | Project | Open |
+| R-011 | Browser automation cannot reliably control chooser flows in selected mode | Medium | Medium | Medium | Standardize on Puppeteer + headed Chrome (or `xvfb-run`), fail fast on true headless mode, keep smoke test for chooser event | E2E test cannot observe/select device prompt | Project | Open |
 
 ## Deferred risks (post-MVP)
 
@@ -42,3 +43,4 @@ This register tracks MVP and near-term risks for browser-based nRF flashing over
 1. Create a probe/browser compatibility matrix once first hardware tests begin.
 2. Add explicit address-policy checks in design before flash backend implementation.
 3. Define shared error codes and UI mapping before M3 backend integration.
+4. Stand up Puppeteer smoke test early (M0.5) to validate chooser flow before protocol implementation.

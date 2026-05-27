@@ -23,6 +23,18 @@ Overall feasibility is **good** if scope is controlled:
 
 Main constraints are browser support, host driver binding behavior, protocol/documentation gaps on J-Link WebUSB details, and safety around destructive flash operations.
 
+## Test automation feasibility
+
+A browser-automation path is feasible and should be part of the MVP plan.
+
+- Use Puppeteer with a real Chrome instance (not true headless mode) to drive DOM actions and capture native device-picker events.
+- This approach is already proven in a similar project (`~/repos/web-bluetooth-dfu`) where browser permission flows are exercised end-to-end.
+- Chrome DevTools MCP is useful for inspection but not sufficient for this project because it cannot operate the native chooser flow required for permissioned USB device selection.
+
+Operational implication:
+
+- Test jobs should run with a headed Chrome session, optionally under `xvfb-run` on machines without a display.
+
 ## Backend direction 1: SEGGER J-Link WebUSB (`jlink-webusb`)
 
 ### What appears feasible
@@ -189,3 +201,5 @@ This gives fast validation without locking architecture to a single vendor path.
 - DAPjs repository and license (MIT)
 - pyOCD repository and license (Apache-2.0)
 - OpenOCD licensing statement (GPL-2.0-or-later)
+- `~/repos/web-bluetooth-dfu/TESTING.md` (Puppeteer + native chooser workflow)
+- `~/repos/web-bluetooth-dfu/tools/browser-dfu-test.mjs` (automation pattern and flags)

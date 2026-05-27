@@ -116,6 +116,21 @@ Exit criteria:
 - App loads from local static server
 - Connect button flow and state transitions work with mock backend
 
+## M0.5 - Browser test harness foundation
+
+Deliverables:
+
+- `tools/` test workspace for dev-only dependencies (Puppeteer only, not runtime app deps)
+- First browser harness script to launch Chrome with required flags and open app URL
+- Native device-picker capture flow validated for WebUSB request path
+- `docs/testing.md` with prerequisites and execution commands
+
+Exit criteria:
+
+- Harness can drive app DOM actions and wait for the native chooser event
+- Harness runs in local desktop mode and in `xvfb-run` mode
+- Harness clearly reports unsupported execution mode (for example true headless)
+
 ## M1 - Intel HEX parser and safety preflight
 
 Deliverables:
@@ -154,6 +169,7 @@ Exit criteria:
 
 - Connect/disconnect works on nRF52840 DK (J-Link OB)
 - Error cases documented (permission denied, interface claim failure)
+- Browser harness automates connect-path smoke test with chooser selection
 
 ## M4 - J-Link WebUSB flash MVP
 
@@ -238,3 +254,4 @@ MVP is complete when all of the following are true:
 1. Create `docs/risk-register.md` seeded from this plan.
 2. Draft `docs/protocol-notes-jlink.md` with observed interface IDs/endpoints once hardware probing starts.
 3. Implement M0 skeleton and mock backend before touching real probe flows.
+4. Implement M0.5 test harness before backend protocol work to surface environment issues early.

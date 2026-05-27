@@ -1,0 +1,11 @@
+{
+  "name": "web-swd-flasher-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "browser-smoke": "node browser-smoke.mjs"
+  },
+  "dependencies": {
+    "puppeteer": "^25.0.4"
+  }
+}

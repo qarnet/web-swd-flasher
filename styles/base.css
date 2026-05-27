@@ -1,0 +1,88 @@
+:root {
+  --bg: #f4f7f2;
+  --fg: #1f2a1f;
+  --muted: #4d5b4d;
+  --panel: #ffffff;
+  --accent: #2c6e49;
+  --warn-bg: #ffecc9;
+  --warn-fg: #5a3c00;
+  --border: #d7dfd7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: linear-gradient(135deg, #eef5eb, var(--bg));
+  color: var(--fg);
+}
+
+.app {
+  max-width: 880px;
+  margin: 2rem auto;
+  padding: 0 1rem 2rem;
+}
+
+h1 {
+  margin-bottom: 0.25rem;
+}
+
+.sub {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.banner {
+  margin-top: 1rem;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid #e1c38a;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.status {
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+.log {
+  min-height: 180px;
+  margin: 0;
+  background: #0f1a12;
+  color: #eaf4eb;
+  padding: 0.75rem;
+  border-radius: 8px;
+  overflow: auto;
+}
