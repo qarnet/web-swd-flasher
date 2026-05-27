@@ -36,6 +36,14 @@ async function waitForConnectedOrError(page, timeoutMs) {
   return { ok: false, status: "timeout" };
 }
 
+async function readLogTail(page) {
+  return page.evaluate(() => {
+    const text = document.getElementById("log")?.textContent || "";
+    const lines = text.trim().split("\n");
+    return lines.slice(Math.max(0, lines.length - 10));
+  });
+}
+
 if (HEADLESS) {
   console.error("HEADLESS=1 is not supported for chooser smoke tests.");
   process.exit(2);
@@ -109,6 +117,14 @@ async function main() {
 
     const result = await waitForConnectedOrError(page, CONNECT_TIMEOUT_MS);
     if (!result.ok) {
+      const tail = await readLogTail(page);
+      if (tail.length) {
+        info("Recent app logs:");
+        for (const line of tail) {
+          info(`  ${line}`);
+        }
+      }
+      await page.screenshot({ path: "browser-smoke-failure.png", fullPage: true });
       throw new Error(`Connect did not complete: ${result.status}`);
     }
     info(`Connect status: ${result.status}`);

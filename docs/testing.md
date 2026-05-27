@@ -153,3 +153,8 @@ Optional environment variables:
 Known limitation:
 
 - For WebUSB backends, Puppeteer's `waitForDevicePrompt()` may not always receive a prompt event even though the native chooser is shown. The smoke script now falls back to polling connection status so manual chooser selection workflows still complete.
+
+Failure artifacts:
+
+- `browser-smoke-failure.png` is written on connect timeout/failure.
+- The harness prints the tail of in-app logs to speed up triage.
