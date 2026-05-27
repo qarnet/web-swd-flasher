@@ -7,6 +7,7 @@ const HEADLESS = process.env.HEADLESS === "1";
 const CHROME_BIN = process.env.PUPPETEER_CHROME || undefined;
 const BACKEND = process.env.BACKEND || "mock";
 const CONNECT_TIMEOUT_MS = parseInt(process.env.CONNECT_TIMEOUT_MS || "45000", 10);
+const AUTO_SELECT_USB_RULE = process.env.AUTO_SELECT_USB_RULE || "";
 
 function info(msg) {
   console.log(`  ${msg}`);
@@ -56,6 +57,10 @@ async function launchBrowser() {
     "--disable-default-apps",
     "--disable-popup-blocking"
   ];
+
+  if (AUTO_SELECT_USB_RULE) {
+    args.push(`--auto-select-usb-devices-for-urls=${AUTO_SELECT_USB_RULE}`);
+  }
 
   return puppeteer.launch({
     headless: false,

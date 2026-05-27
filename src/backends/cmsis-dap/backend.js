@@ -12,7 +12,7 @@ export class CmsisDapBackend extends ProbeBackend {
     this.core = new CmsisDapCore(this.transport);
     this.adi = new AdiSession(this.core);
     this.target = new Nrf52Target(this.adi);
-    this.flash = new Nrf52FlashProgrammer(progressBus);
+    this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
   }
 
   async requestDevice() {
@@ -56,6 +56,10 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async reset(mode = "run") {
+    if (mode === "run") {
+      await this.adi.writeMem32(0xe000ed0c, 0x05fa0004);
+      return { mode: "run", method: "sysresetreq" };
+    }
     return { mode };
   }
 

@@ -40,6 +40,13 @@ export class AdiSession {
     return this.readAp(0x0c);
   }
 
+  async writeMem32(address, value) {
+    await this.selectAp(0, 0);
+    await this.writeAp(0x00, 0x23000052);
+    await this.writeAp(0x04, address >>> 0);
+    await this.writeAp(0x0c, value >>> 0);
+  }
+
   async readMemBlock(address, lengthBytes) {
     const out = new Uint8Array(lengthBytes);
     let current = address >>> 0;
@@ -52,5 +59,18 @@ export class AdiSession {
       current += 4;
     }
     return out;
+  }
+
+  async writeMemBlock(address, bytes) {
+    let current = address >>> 0;
+    for (let i = 0; i < bytes.length; i += 4) {
+      const b0 = bytes[i] ?? 0xff;
+      const b1 = bytes[i + 1] ?? 0xff;
+      const b2 = bytes[i + 2] ?? 0xff;
+      const b3 = bytes[i + 3] ?? 0xff;
+      const value = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+      await this.writeMem32(current, value);
+      current += 4;
+    }
   }
 }
