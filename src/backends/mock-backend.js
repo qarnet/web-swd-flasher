@@ -40,7 +40,14 @@ export class MockBackend extends ProbeBackend {
     return {
       family: "nRF52",
       part: "nRF52840",
-      id: "MOCK-1234"
+      id: "MOCK-1234",
+      ficr: {
+        part: 0x52840,
+        variant: 0x41414141,
+        package: 0x2000,
+        ram: 256,
+        flash: 1024
+      }
     };
   }
 

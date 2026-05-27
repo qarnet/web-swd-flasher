@@ -4,6 +4,7 @@ import { ProgressBus } from "./core/progress.js";
 import { parseIntelHexFileText } from "./hex/intel-hex-parser.js";
 import { buildImageMap, formatImageMap } from "./hex/image-map.js";
 import { validateAppRange } from "./nrf/nrf52-memory-map.js";
+import { formatFicrInfo } from "./nrf/nrf52-ficr.js";
 
 const compatBanner = document.getElementById("compat-banner");
 const compatMsg = document.getElementById("compat-msg");
@@ -83,6 +84,9 @@ async function connectProbe() {
     connected = true;
     setConnected(true);
     setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part}`);
+    if (target.ficr) {
+      log(`FICR: ${formatFicrInfo(target.ficr)}`);
+    }
   } catch (error) {
     const normalized = normalizeError(error);
     setStatus(`Connect failed (${normalized.code}): ${normalized.message}`);

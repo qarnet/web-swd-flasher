@@ -146,4 +146,5 @@ Optional environment variables:
 
 - `APP_URL` (default `http://localhost:8000`)
 - `PUPPETEER_CHROME` (custom Chrome path)
+- `BACKEND` (`mock`, `jlink-webusb`, `cmsis-dap`; default `mock`)
 - `HEADLESS=1` intentionally fails fast for chooser tests

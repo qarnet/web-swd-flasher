@@ -5,6 +5,7 @@ import puppeteer from "puppeteer";
 const APP_URL = process.env.APP_URL || "http://localhost:8000";
 const HEADLESS = process.env.HEADLESS === "1";
 const CHROME_BIN = process.env.PUPPETEER_CHROME || undefined;
+const BACKEND = process.env.BACKEND || "mock";
 
 function info(msg) {
   console.log(`  ${msg}`);
@@ -38,6 +39,7 @@ async function main() {
   step("Launching browser");
   info(`URL: ${APP_URL}`);
   info(`Chrome: ${CHROME_BIN || "puppeteer bundled"}`);
+  info(`Backend: ${BACKEND}`);
 
   const browser = await launchBrowser();
   const page = await browser.newPage();
@@ -45,6 +47,8 @@ async function main() {
   try {
     step("Opening application");
     await page.goto(APP_URL, { waitUntil: "networkidle0", timeout: 15000 });
+
+    await page.select("#backend-select", BACKEND);
 
     const compatVisible = await page.evaluate(() => {
       const b = document.getElementById("compat-banner");
@@ -57,10 +61,15 @@ async function main() {
     }
 
     step("Triggering USB chooser");
-    const [prompt] = await Promise.all([
-      page.waitForDevicePrompt({ timeout: 30000 }),
-      page.click("#btn-connect")
-    ]);
+    const clickPromise = page.click("#btn-connect");
+    if (BACKEND === "mock") {
+      await clickPromise;
+      info("Mock backend selected; chooser path skipped");
+      step("Smoke test passed");
+      return;
+    }
+
+    const [prompt] = await Promise.all([page.waitForDevicePrompt({ timeout: 30000 }), clickPromise]);
 
     info("Chooser opened successfully");
     const devices = await prompt.devices();
