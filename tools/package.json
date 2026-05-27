@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "browser-smoke": "node browser-smoke.mjs"
+    "browser-smoke": "node browser-smoke.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "puppeteer": "^25.0.4"
