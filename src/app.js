@@ -17,6 +17,7 @@ const backendSelect = document.getElementById("backend-select");
 const chkConfirmProgram = document.getElementById("chk-confirm-program");
 const statusEl = document.getElementById("status");
 const logEl = document.getElementById("log");
+const targetInfoEl = document.getElementById("target-info");
 const fileInput = document.getElementById("file-input");
 const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
@@ -40,6 +41,26 @@ function log(message) {
 function setStatus(message) {
   statusEl.textContent = message;
   log(message);
+}
+
+function renderTargetInfo(probe, target) {
+  const lines = [];
+  lines.push(`Backend: ${probe.backend}`);
+  lines.push(`Probe: ${probe.name || "unknown"}`);
+  if (probe.manufacturer) lines.push(`Manufacturer: ${probe.manufacturer}`);
+  if (probe.transport) lines.push(`Transport: ${probe.transport}`);
+  if (probe.packetSize) lines.push(`Packet size: ${probe.packetSize}`);
+  lines.push(`Target family: ${target.family || "unknown"}`);
+  lines.push(`Target part: ${target.part || "unknown"}`);
+  if (target.dpidr) lines.push(`DPIDR: ${target.dpidr}`);
+  if (target.ficr) {
+    lines.push(`FICR part: 0x${target.ficr.part.toString(16)}`);
+    lines.push(`FICR variant: 0x${target.ficr.variant.toString(16)}`);
+    lines.push(`FICR package: 0x${target.ficr.package.toString(16)}`);
+    lines.push(`FICR ram: ${target.ficr.ram}`);
+    lines.push(`FICR flash: ${target.ficr.flash}`);
+  }
+  targetInfoEl.textContent = lines.join("\n");
 }
 
 function setConnected(connected) {
@@ -91,6 +112,7 @@ async function connectProbe() {
     connected = true;
     setConnected(true);
     setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part}`);
+    renderTargetInfo(probe, target);
     if (target.ficr) {
       log(`FICR: ${formatFicrInfo(target.ficr)}`);
     }
@@ -109,6 +131,7 @@ async function disconnectProbe() {
   connected = false;
   setConnected(false);
   setStatus("Disconnected");
+  targetInfoEl.textContent = "";
 }
 
 async function onFirmwareSelected(event) {
