@@ -76,6 +76,10 @@ function checkCompatibility() {
 
 async function connectProbe() {
   try {
+    const known = await backend.getAuthorizedDevices();
+    if (known.length > 0) {
+      log(`Found ${known.length} previously authorized USB device(s).`);
+    }
     setStatus("Selecting probe...");
     await backend.requestDevice();
     await backend.connect();

@@ -9,7 +9,22 @@ export class JLinkWebUsbTransport {
   }
 
   async requestDevice() {
+    const known = await navigator.usb.getDevices();
+    const cached = known.find((dev) => dev.vendorId === 0x1366);
+    if (cached) {
+      this.device = cached;
+      return this.device;
+    }
     this.device = await navigator.usb.requestDevice({ filters: JLINK_FILTERS });
+    return this.device;
+  }
+
+  async getAuthorizedDevices() {
+    return navigator.usb.getDevices();
+  }
+
+  useDevice(device) {
+    this.device = device;
     return this.device;
   }
 

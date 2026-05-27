@@ -10,7 +10,22 @@ export class CmsisDapWebUsbTransport {
   }
 
   async requestDevice() {
+    const known = await navigator.usb.getDevices();
+    const cached = known.find((dev) => dev.vendorId === 0x0d28);
+    if (cached) {
+      this.device = cached;
+      return this.device;
+    }
     this.device = await navigator.usb.requestDevice({ filters: CMSIS_DAP_FILTERS });
+    return this.device;
+  }
+
+  async getAuthorizedDevices() {
+    return navigator.usb.getDevices();
+  }
+
+  useDevice(device) {
+    this.device = device;
     return this.device;
   }
 

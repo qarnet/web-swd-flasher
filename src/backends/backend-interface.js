@@ -3,6 +3,10 @@ export class ProbeBackend {
     throw new Error("requestDevice() not implemented");
   }
 
+  async getAuthorizedDevices() {
+    return [];
+  }
+
   async connect() {
     throw new Error("connect() not implemented");
   }

@@ -15,6 +15,10 @@ export class JLinkWebUsbBackend extends ProbeBackend {
     return this.transport.requestDevice();
   }
 
+  async getAuthorizedDevices() {
+    return this.transport.getAuthorizedDevices();
+  }
+
   async connect() {
     await this.client.connect();
   }

@@ -16,6 +16,10 @@ export class MockBackend extends ProbeBackend {
     return { selected: true };
   }
 
+  async getAuthorizedDevices() {
+    return [{ mock: true }];
+  }
+
   async connect() {
     await sleep(120);
     this.connected = true;
