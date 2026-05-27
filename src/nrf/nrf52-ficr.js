@@ -10,13 +10,13 @@ function readU32(data, offset) {
   ) >>> 0;
 }
 
-export function parseNrf52Ficr(snapshot) {
+export function parseNrf52Ficr(snapshot, baseOffset = 0x100) {
   return {
-    part: readU32(snapshot, 0x100),
-    variant: readU32(snapshot, 0x104),
-    package: readU32(snapshot, 0x108),
-    ram: readU32(snapshot, 0x10c),
-    flash: readU32(snapshot, 0x110)
+    part: readU32(snapshot, baseOffset + 0x00),
+    variant: readU32(snapshot, baseOffset + 0x04),
+    package: readU32(snapshot, baseOffset + 0x08),
+    ram: readU32(snapshot, baseOffset + 0x0c),
+    flash: readU32(snapshot, baseOffset + 0x10)
   };
 }
 

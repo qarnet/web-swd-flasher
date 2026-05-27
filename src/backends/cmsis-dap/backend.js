@@ -43,8 +43,8 @@ export class CmsisDapBackend extends ProbeBackend {
     return this.target.identify();
   }
 
-  async readMemory() {
-    throw new Error("CMSIS-DAP readMemory not implemented");
+  async readMemory(addr, len) {
+    return this.adi.readMemBlock(addr, len);
   }
 
   async programImage(image, options) {
@@ -61,7 +61,7 @@ export class CmsisDapBackend extends ProbeBackend {
 
   capabilities() {
     return {
-      supportsReadMemory: false,
+      supportsReadMemory: true,
       supportsFlash: true,
       supportsVerify: true,
       supportsReset: true
