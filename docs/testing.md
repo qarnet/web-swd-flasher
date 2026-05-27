@@ -103,6 +103,21 @@ Observed patterns to mirror:
 
 ## Current commands
 
+Preferred workflow: run commands through Nix shell.
+
+```bash
+nix develop
+```
+
+Or run a one-off command:
+
+```bash
+nix develop -c make browser-smoke
+```
+
+Inside the Nix shell, `PUPPETEER_CHROME` is set to Nix-provided Chromium and
+`PUPPETEER_SKIP_DOWNLOAD=1` avoids Puppeteer downloading its own browser.
+
 Install test dependencies:
 
 ```bash

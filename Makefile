@@ -4,7 +4,7 @@ serve:
 	python -m http.server 8000
 
 tools-install:
-	npm --prefix tools install
+	PUPPETEER_SKIP_DOWNLOAD=1 npm --prefix tools install
 
 browser-smoke:
 	npm --prefix tools run browser-smoke
