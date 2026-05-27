@@ -147,4 +147,9 @@ Optional environment variables:
 - `APP_URL` (default `http://localhost:8000`)
 - `PUPPETEER_CHROME` (custom Chrome path)
 - `BACKEND` (`mock`, `jlink-webusb`, `cmsis-dap`; default `mock`)
+- `CONNECT_TIMEOUT_MS` (connect status polling timeout; default `45000`)
 - `HEADLESS=1` intentionally fails fast for chooser tests
+
+Known limitation:
+
+- For WebUSB backends, Puppeteer's `waitForDevicePrompt()` may not always receive a prompt event even though the native chooser is shown. The smoke script now falls back to polling connection status so manual chooser selection workflows still complete.

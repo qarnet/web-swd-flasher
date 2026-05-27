@@ -6,6 +6,7 @@ const APP_URL = process.env.APP_URL || "http://localhost:8000";
 const HEADLESS = process.env.HEADLESS === "1";
 const CHROME_BIN = process.env.PUPPETEER_CHROME || undefined;
 const BACKEND = process.env.BACKEND || "mock";
+const CONNECT_TIMEOUT_MS = parseInt(process.env.CONNECT_TIMEOUT_MS || "45000", 10);
 
 function info(msg) {
   console.log(`  ${msg}`);
@@ -13,6 +14,26 @@ function info(msg) {
 
 function step(msg) {
   console.log(`\n▶ ${msg}`);
+}
+
+async function waitForConnectedOrError(page, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const snapshot = await page.evaluate(() => {
+      const status = document.getElementById("status")?.textContent || "";
+      const connected = document.getElementById("btn-disconnect")?.disabled === false;
+      return { status, connected };
+    });
+
+    if (snapshot.connected) {
+      return { ok: true, status: snapshot.status };
+    }
+    if (/failed/i.test(snapshot.status)) {
+      return { ok: false, status: snapshot.status };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { ok: false, status: "timeout" };
 }
 
 if (HEADLESS) {
@@ -69,19 +90,28 @@ async function main() {
       return;
     }
 
-    const [prompt] = await Promise.all([page.waitForDevicePrompt({ timeout: 30000 }), clickPromise]);
-
-    info("Chooser opened successfully");
-    const devices = await prompt.devices();
-    info(`Chooser listed devices: ${devices.length}`);
-
-    if (devices.length > 0) {
-      await prompt.select(devices[0]);
-      info(`Selected: ${devices[0].name || "(unnamed)"}`);
-    } else {
-      await prompt.cancel();
-      info("No matching devices listed; cancelled chooser");
+    try {
+      const [prompt] = await Promise.all([page.waitForDevicePrompt({ timeout: 15000 }), clickPromise]);
+      info("Chooser opened successfully (Puppeteer prompt API)");
+      const devices = await prompt.devices();
+      info(`Chooser listed devices: ${devices.length}`);
+      if (devices.length > 0) {
+        await prompt.select(devices[0]);
+        info(`Selected: ${devices[0].name || "(unnamed)"}`);
+      } else {
+        await prompt.cancel();
+        info("No matching devices listed; cancelled chooser");
+      }
+    } catch {
+      info("Device prompt API timed out; likely native WebUSB chooser is open without automation hook.");
+      info("Proceeding with status polling for manual selection workflows.");
     }
+
+    const result = await waitForConnectedOrError(page, CONNECT_TIMEOUT_MS);
+    if (!result.ok) {
+      throw new Error(`Connect did not complete: ${result.status}`);
+    }
+    info(`Connect status: ${result.status}`);
 
     step("Smoke test passed");
   } finally {
