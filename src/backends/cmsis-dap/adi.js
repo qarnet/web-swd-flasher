@@ -17,7 +17,11 @@ export class AdiSession {
   }
 
   async readAp(register) {
-    return this.dapCore.transfer("ap", register, null);
+    const results = await this.dapCore.transferMultiple([
+      { port: "ap", register, value: null },
+      { port: "dp", register: 0x0c, value: null }
+    ]);
+    return results[1];
   }
 
   async writeAp(register, value) {
