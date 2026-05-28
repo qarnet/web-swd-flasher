@@ -61,6 +61,15 @@ const btnMemExport = document.getElementById("btn-mem-export");
 const memStatusEl = document.getElementById("mem-status");
 const memDumpEl = document.getElementById("mem-dump");
 
+const uartBaudSelect = document.getElementById("uart-baud-select");
+const btnUartOpen = document.getElementById("btn-uart-open");
+const btnUartClose = document.getElementById("btn-uart-close");
+const btnUartClear = document.getElementById("btn-uart-clear");
+const uartStatusEl = document.getElementById("uart-status");
+const uartLogEl = document.getElementById("uart-log");
+const uartTxInput = document.getElementById("uart-tx-input");
+const btnUartSend = document.getElementById("btn-uart-send");
+
 // --- Theme ---
 (function initTheme() {
   const saved = localStorage.getItem("theme") || "light";
@@ -87,6 +96,7 @@ let imageContext = null;
 let connected = false;
 let lastReadData = null;  // {addr, bytes: Uint8Array} — for export
 let rttClient = null;
+let uartOpen = false;
 let readRegions = [];     // [{start, size, ok}] — for visualizer overlay
 
 // --- Logging ---
@@ -183,13 +193,21 @@ function setConnected(isConnected) {
   btnMemRead.disabled = !isConnected;
   btnMemReadFlash.disabled = !isConnected;
   btnRttSearch.disabled = !isConnected;
-  if (!isConnected) {
+  if (isConnected) {
+    btnUartOpen.disabled = !backend.hasUART;
+  } else {
     if (rttClient) { rttClient.stop(); rttClient = null; }
     btnRttStart.disabled = true;
     btnRttStop.disabled = true;
     rttTxInput.disabled = true;
     btnRttSend.disabled = true;
     rttStatusEl.textContent = "";
+    if (uartOpen) { backend.closeUart().catch(() => {}); uartOpen = false; }
+    btnUartOpen.disabled = true;
+    btnUartClose.disabled = true;
+    uartTxInput.disabled = true;
+    btnUartSend.disabled = true;
+    uartStatusEl.textContent = "";
     probeCapsEl.hidden = true;
     probeCapsEl.textContent = "";
     recoveryStatusEl.textContent = "";
@@ -713,6 +731,62 @@ async function runRttSend() {
   }
 }
 
+// --- UART passthrough ---
+function uartLog(text) {
+  uartLogEl.textContent += text;
+  uartLogEl.scrollTop = uartLogEl.scrollHeight;
+}
+
+async function openUartSession() {
+  if (!backend.hasUART) {
+    uartStatusEl.textContent = "Probe does not support UART (capability bit 7 not set)";
+    return;
+  }
+  const baudRate = parseInt(uartBaudSelect.value, 10);
+  uartStatusEl.textContent = `Opening at ${baudRate} baud…`;
+  try {
+    await backend.openUart({
+      baudRate,
+      onData: (bytes) => uartLog(new TextDecoder().decode(bytes)),
+      pollIntervalMs: 20
+    });
+    uartOpen = true;
+    btnUartOpen.disabled = true;
+    btnUartClose.disabled = false;
+    uartTxInput.disabled = false;
+    btnUartSend.disabled = false;
+    uartStatusEl.textContent = `Open at ${baudRate} baud`;
+    log(`UART opened at ${baudRate} baud`);
+  } catch (error) {
+    uartStatusEl.textContent = `Open failed: ${normalizeError(error).message}`;
+    log(`UART open failed: ${normalizeError(error).message}`);
+  }
+}
+
+async function closeUartSession() {
+  try {
+    await backend.closeUart();
+  } catch { /* ignore */ }
+  uartOpen = false;
+  btnUartOpen.disabled = !backend.hasUART;
+  btnUartClose.disabled = true;
+  uartTxInput.disabled = true;
+  btnUartSend.disabled = true;
+  uartStatusEl.textContent = "Closed";
+  log("UART closed");
+}
+
+async function sendUartData() {
+  const text = uartTxInput.value;
+  if (!text || !uartOpen) return;
+  try {
+    await backend.sendUart(new TextEncoder().encode(text));
+    uartTxInput.value = "";
+  } catch (error) {
+    uartStatusEl.textContent = `Send failed: ${normalizeError(error).message}`;
+  }
+}
+
 // --- Backend / clock change ---
 async function onBackendChanged(event) {
   const name = event.target.value;
@@ -755,6 +829,11 @@ btnRttStop.addEventListener("click", runRttStop);
 btnRttClear.addEventListener("click", () => { rttLogEl.textContent = ""; });
 btnRttSend.addEventListener("click", runRttSend);
 rttTxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runRttSend(); });
+btnUartOpen.addEventListener("click", openUartSession);
+btnUartClose.addEventListener("click", closeUartSession);
+btnUartClear.addEventListener("click", () => { uartLogEl.textContent = ""; });
+btnUartSend.addEventListener("click", sendUartData);
+uartTxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendUartData(); });
 
 document.getElementById("flash-mode-select").addEventListener("change", () => mergeAndUpdate());
 

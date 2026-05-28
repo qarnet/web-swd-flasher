@@ -204,6 +204,50 @@ export class CmsisDapCore {
     return response;
   }
 
+  // SWD multi-drop target selection (ADIv5.2 / SWDv2).
+  // targetSel: 32-bit TARGETSEL value (DLPIDR bits [31:28] | TDESIGNER bits [27:12] | TPARTNO bits [11:4] | TINSTANCE bits [3:0])
+  // Sends the dormant-to-SWD activation sequence then writes TARGETSEL.
+  // NOTE: TARGETSEL is a write-only register with no ACK phase; the DAP_Transfer
+  //       WAIT/FAULT handling is intentionally bypassed. Use after SWJ line reset.
+  async selectSwdTarget(targetSel) {
+    // Bring all targets to line-reset / dormant state
+    await this.sendCommand(new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+    // Dormant-to-SWD alert sequence (128 bits, MSB first on wire per ADIv5.2 §B5.3.4)
+    await this.sendCommand(new Uint8Array([
+      0x12, 128,
+      0x92, 0xf3, 0x09, 0x62, 0x95, 0x2d, 0x85, 0x86,
+      0xe9, 0xaf, 0xdd, 0xe3, 0xa2, 0x0e, 0xbc, 0x19
+    ]));
+    // Activation header (4 bits: 0b0001) then activation code (8 bits: 0x6A = SWD)
+    await this.sendCommand(new Uint8Array([0x12, 4, 0x1a]));
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x6a]));
+    // TARGETSEL write: DP bank 1, reg 0xC (A[3:2]=0b11), no ACK expected.
+    // Build the raw SWD packet manually via SWJ_Sequence.
+    // Packet: start(1) | APnDP(0) | RnW(0) | A[2](1) | A[3](1) | parity | stop(0) | park(1)
+    const packet = 0b10011001; // start=1, APnDP=0, RnW=0, A[2]=1, A[3]=1, parity=0, stop=0, park=1
+    const v = targetSel >>> 0;
+    const bits = (v & 1) ^ ((v >> 1) & 1) ^ ((v >> 2) & 1) ^ ((v >> 3) & 1) ^
+      ((v >> 4) & 1) ^ ((v >> 5) & 1) ^ ((v >> 6) & 1) ^ ((v >> 7) & 1) ^
+      ((v >> 8) & 1) ^ ((v >> 9) & 1) ^ ((v >> 10) & 1) ^ ((v >> 11) & 1) ^
+      ((v >> 12) & 1) ^ ((v >> 13) & 1) ^ ((v >> 14) & 1) ^ ((v >> 15) & 1) ^
+      ((v >> 16) & 1) ^ ((v >> 17) & 1) ^ ((v >> 18) & 1) ^ ((v >> 19) & 1) ^
+      ((v >> 20) & 1) ^ ((v >> 21) & 1) ^ ((v >> 22) & 1) ^ ((v >> 23) & 1) ^
+      ((v >> 24) & 1) ^ ((v >> 25) & 1) ^ ((v >> 26) & 1) ^ ((v >> 27) & 1) ^
+      ((v >> 28) & 1) ^ ((v >> 29) & 1) ^ ((v >> 30) & 1) ^ ((v >> 31) & 1);
+    const parity = bits & 1;
+    const dataWithParity = [
+      v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff, parity
+    ];
+    await this.sendCommand(new Uint8Array([0x12, 8, packet]));
+    // Turnaround + 32-bit data + parity (no ACK phase — target does not drive bus)
+    await this.sendCommand(new Uint8Array([0x12, 33, ...dataWithParity]));
+    // Idle cycles then read DPIDR to confirm the target responded
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+    const dpidr = await this.readDp(0x00);
+    return dpidr;
+  }
+
   async lineReset() {
     await this.sendCommand(new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
     await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));

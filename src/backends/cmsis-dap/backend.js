@@ -4,6 +4,7 @@ import { CmsisDapCore } from "./dap-core.js";
 import { AdiSession } from "./adi.js";
 import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
 import { Nrf52Recovery } from "./nrf52-recovery.js";
+import { DapUartSession } from "./dap-uart.js";
 import { TARGETS, detectTarget } from "../../targets/target-registry.js";
 
 export class CmsisDapBackend extends ProbeBackend {
@@ -14,6 +15,7 @@ export class CmsisDapBackend extends ProbeBackend {
     this.adi = new AdiSession(this.core);
     this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
     this.recovery = new Nrf52Recovery(this.adi);
+    this.uart = new DapUartSession(this.core);
     this._detectedTarget = null;
     this._ficr = null;
     this._targetOverride = null;
@@ -121,6 +123,26 @@ export class CmsisDapBackend extends ProbeBackend {
       return { mode: "run", method: "sysresetreq" };
     }
     return { mode };
+  }
+
+  get hasUART() {
+    return this.core._caps?.hasUART ?? false;
+  }
+
+  async openUart({ baudRate = 115200, onData = null, pollIntervalMs = 20 } = {}) {
+    await this.uart.open({ baudRate, onData, pollIntervalMs });
+  }
+
+  async closeUart() {
+    await this.uart.close();
+  }
+
+  async sendUart(data) {
+    await this.uart.send(data);
+  }
+
+  async selectSwdTarget(targetSel) {
+    return this.core.selectSwdTarget(targetSel);
   }
 
   capabilities() {
