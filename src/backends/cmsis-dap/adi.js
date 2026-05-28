@@ -91,6 +91,7 @@ export class AdiSession {
     const end = offset + count;
     while (pos < end) {
       const chunkSize = Math.min(maxWords, end - pos);
+      await this.selectAp(0, 0);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },
         { port: "ap", register: 0x04, value: addr }
@@ -108,6 +109,7 @@ export class AdiSession {
     let addr = address >>> 0;
     while (offset < wordCount) {
       const count = Math.min(maxReadWords, wordCount - offset);
+      await this.selectAp(0, 0);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },
         { port: "ap", register: 0x04, value: addr }

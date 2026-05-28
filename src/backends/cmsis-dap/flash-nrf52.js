@@ -103,7 +103,6 @@ export class Nrf52FlashProgrammer {
 
       if (useBlockWrite) {
         const words = this.buildWordArray(image, seg.start, seg.end);
-        await this.adi.selectAp(0, 0);
         await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount);
         writtenWords += segWordCount;
         const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
@@ -137,6 +136,12 @@ export class Nrf52FlashProgrammer {
     const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
     const useBlockRead = typeof this.adi.readMemBlockFast === "function";
     let checked = 0;
+
+    if (segments.length > 0 && useBlockRead) {
+      const firstAddr = segments[0].start;
+      const singleRead = await this.adi.readMem32(firstAddr);
+      this.progressBus.emit({ type: "verify", percent: 0, message: `Diagnostic read32 at 0x${firstAddr.toString(16)}: 0x${singleRead.toString(16)}` });
+    }
 
     for (const seg of segments) {
       const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
