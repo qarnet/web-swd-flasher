@@ -29,6 +29,7 @@ const probeCapsEl = document.getElementById("probe-caps");
 const btnCheckProtection = document.getElementById("btn-check-protection");
 const btnRecover = document.getElementById("btn-recover");
 const recoveryStatusEl = document.getElementById("recovery-status");
+const targetSelect = document.getElementById("target-select");
 
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
@@ -61,6 +62,14 @@ function renderTargetInfo(probe, target) {
   lines.push(`Target family: ${target.family || "unknown"}`);
   lines.push(`Target part: ${target.part || "unknown"}`);
   if (target.dpidr) lines.push(`DPIDR: ${target.dpidr}`);
+  if (target.flash) {
+    const mb = (target.flash.size / 1024 / 1024).toFixed(3);
+    lines.push(`Flash: 0x${target.flash.start.toString(16)} + ${mb} MB (page ${target.flash.pageSize / 1024} KB)`);
+  }
+  if (target.ram) {
+    const kb = target.ram.size / 1024;
+    lines.push(`RAM: 0x${target.ram.start.toString(16)} + ${kb} KB`);
+  }
   if (target.ficr) {
     lines.push(`FICR part: 0x${target.ficr.part.toString(16)}`);
     lines.push(`FICR variant: 0x${target.ficr.variant.toString(16)}`);
@@ -88,16 +97,30 @@ function renderTargetInfo(probe, target) {
   }
 }
 
-function setConnected(connected) {
-  window.connectedState = connected;
-  btnConnect.disabled = connected;
-  btnDisconnect.disabled = !connected;
-  btnCheckProtection.disabled = !connected;
-  btnRecover.disabled = !connected;
-  if (!connected) {
+function populateTargetSelector() {
+  const targets = backend.availableTargets ?? [];
+  while (targetSelect.options.length > 1) targetSelect.remove(1);
+  for (const t of targets) {
+    if (t.id === "generic") continue;
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.label;
+    targetSelect.appendChild(opt);
+  }
+}
+
+function setConnected(isConnected) {
+  window.connectedState = isConnected;
+  btnConnect.disabled = isConnected;
+  btnDisconnect.disabled = !isConnected;
+  btnCheckProtection.disabled = !isConnected;
+  btnRecover.disabled = !isConnected;
+  targetSelect.disabled = !isConnected;
+  if (!isConnected) {
     probeCapsEl.hidden = true;
     probeCapsEl.textContent = "";
     recoveryStatusEl.textContent = "";
+    targetSelect.value = "auto";
   }
   updateOperationButtons();
 }
@@ -144,8 +167,13 @@ async function connectProbe() {
     const probe = await backend.getProbeInfo();
     const target = await backend.getTargetInfo();
     connected = true;
+    populateTargetSelector();
+    if (target.id && target.id !== "generic") {
+      targetSelect.value = target.id;
+    }
     setConnected(true);
-    setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part}`);
+    const detectNote = target.autoDetected ? "(auto-detected)" : "(manual)";
+    setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part} ${detectNote}`);
     renderTargetInfo(probe, target);
     if (target.ficr) {
       log(`FICR: ${formatFicrInfo(target.ficr)}`);
@@ -208,7 +236,8 @@ function loadHexText(text, mode = "app-only") {
   try {
     const parsed = parseIntelHexFileText(text);
     const map = buildImageMap(parsed);
-    const policy = validateAppRange(map, mode);
+    const activeTarget = connected ? backend.activeTarget : null;
+    const policy = validateAppRange(map, mode, activeTarget);
     imageContext = { parsed, map, policy, mode };
     imageMapEl.textContent = formatImageMap(map);
     if (policy.ok) {
@@ -362,6 +391,24 @@ clockSelect.addEventListener("change", onClockChanged);
 chkConfirmProgram.addEventListener("change", updateOperationButtons);
 btnCheckProtection.addEventListener("click", runCheckProtection);
 btnRecover.addEventListener("click", runRecoverDevice);
+targetSelect.addEventListener("change", () => {
+  const val = targetSelect.value;
+  try {
+    backend.setTargetOverride(val === "auto" ? null : val);
+    log(`Target override: ${val === "auto" ? "auto-detect" : val}`);
+    if (imageContext) {
+      const activeTarget = backend.activeTarget;
+      const policy = validateAppRange(imageContext.map, imageContext.mode, activeTarget);
+      imageContext.policy = policy;
+      if (!policy.ok) {
+        for (const issue of policy.violations) log(`Policy violation: ${issue}`);
+      }
+      updateOperationButtons();
+    }
+  } catch (e) {
+    log(`Target change failed: ${e.message}`);
+  }
+});
 
 progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);

@@ -36,6 +36,12 @@
           <button id="btn-connect" type="button">Connect Probe</button>
           <button id="btn-disconnect" type="button" disabled>Disconnect</button>
         </div>
+        <div class="row">
+          <label for="target-select">Target</label>
+          <select id="target-select" disabled>
+            <option value="auto">Auto-detect</option>
+          </select>
+        </div>
         <p id="status" class="status">Idle</p>
         <pre id="target-info" class="log"></pre>
         <pre id="probe-caps" class="log" hidden></pre>

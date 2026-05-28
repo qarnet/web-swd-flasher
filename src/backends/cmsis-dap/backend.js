@@ -2,9 +2,9 @@ import { ProbeBackend } from "../backend-interface.js";
 import { CmsisDapWebUsbTransport } from "./transport-webusb.js";
 import { CmsisDapCore } from "./dap-core.js";
 import { AdiSession } from "./adi.js";
-import { Nrf52Target } from "./nrf52-target.js";
 import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
 import { Nrf52Recovery } from "./nrf52-recovery.js";
+import { TARGETS, detectTarget } from "../../targets/target-registry.js";
 
 export class CmsisDapBackend extends ProbeBackend {
   constructor(progressBus, logger = null, swdClockHz = 1000000) {
@@ -12,9 +12,29 @@ export class CmsisDapBackend extends ProbeBackend {
     this.transport = new CmsisDapWebUsbTransport(logger);
     this.core = new CmsisDapCore(this.transport, swdClockHz);
     this.adi = new AdiSession(this.core);
-    this.target = new Nrf52Target(this.adi);
     this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
     this.recovery = new Nrf52Recovery(this.adi);
+    this._detectedTarget = null;
+    this._ficr = null;
+    this._targetOverride = null;
+  }
+
+  get activeTarget() {
+    return this._targetOverride ?? this._detectedTarget ?? TARGETS.find((t) => t.id === "generic");
+  }
+
+  get availableTargets() {
+    return TARGETS;
+  }
+
+  setTargetOverride(targetId) {
+    if (targetId === null || targetId === "auto") {
+      this._targetOverride = null;
+      return;
+    }
+    const found = TARGETS.find((t) => t.id === targetId);
+    if (!found) throw new Error(`Unknown target id: ${targetId}`);
+    this._targetOverride = found;
   }
 
   async requestDevice() {
@@ -28,6 +48,9 @@ export class CmsisDapBackend extends ProbeBackend {
   async connect() {
     await this.core.connect();
     await this.adi.connectSwd();
+    const { target, ficr } = await detectTarget(this.adi);
+    this._detectedTarget = target;
+    this._ficr = ficr;
   }
 
   async disconnect() {
@@ -65,7 +88,19 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async getTargetInfo() {
-    return this.target.identify();
+    const tgt = this.activeTarget;
+    const dpidr = await this.adi.readDpidr();
+    return {
+      family: tgt.family,
+      part: tgt.label,
+      id: tgt.id,
+      dpidr: `0x${dpidr.toString(16)}`,
+      ficr: this._ficr,
+      flash: tgt.flash,
+      ram: tgt.ram,
+      programmer: tgt.programmer,
+      autoDetected: this._targetOverride === null
+    };
   }
 
   async readMemory(addr, len) {
