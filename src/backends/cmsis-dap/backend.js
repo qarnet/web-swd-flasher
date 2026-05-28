@@ -75,4 +75,47 @@ export class CmsisDapBackend extends ProbeBackend {
       supportsReset: true
     };
   }
+
+  async diagRawRead32(addr) {
+    const adi = this.adi;
+    const core = this.core;
+    const results = {};
+    results.step1_selectAp = await (async () => {
+      await adi.selectAp(0, 0);
+      const sel = await core.transfer("dp", 0x08, null);
+      return `DP SELECT after selectAp(0,0): 0x${sel.toString(16)}`;
+    })();
+    results.step2_writeCSW = await (async () => {
+      await core.transferMultiple([
+        { port: "ap", register: 0x00, value: 0x23000052 }
+      ]);
+      return "CSW = 0x23000052 written via transferMultiple";
+    })();
+    results.step3_writeTAR = await (async () => {
+      await core.transferMultiple([
+        { port: "ap", register: 0x04, value: addr >>> 0 }
+      ]);
+      return `TAR = 0x${(addr >>> 0).toString(16)} written via transferMultiple`;
+    })();
+    results.step4_readDRW = await (async () => {
+      const val = await core.transferMultiple([
+        { port: "ap", register: 0x0c, value: null }
+      ]);
+      return `DRW read via transferMultiple: 0x${val[0].toString(16)}`;
+    })();
+    results.step5_selectAp_again = await (async () => {
+      await adi.selectAp(0, 0);
+      const sel = await core.transfer("dp", 0x08, null);
+      return `DP SELECT after second selectAp(0,0): 0x${sel.toString(16)}`;
+    })();
+    results.step6_readMem32 = await (async () => {
+      const val = await adi.readMem32(addr);
+      return `readMem32(0x${(addr >>> 0).toString(16)}): 0x${val.toString(16)}`;
+    })();
+    results.step7_readAnotherAddr = await (async () => {
+      const val = await adi.readMem32(addr + 4);
+      return `readMem32(0x${((addr + 4) >>> 0).toString(16)}): 0x${val.toString(16)}`;
+    })();
+    return results;
+  }
 }

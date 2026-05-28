@@ -299,6 +299,54 @@ progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);
 });
 
+window.diagRead = async (addr = 0x0) => {
+  if (!connected) {
+    log("Not connected");
+    return;
+  }
+  try {
+    const results = await backend.diagRawRead32(addr);
+    for (const [step, msg] of Object.entries(results)) {
+      log(`  ${step}: ${msg}`);
+    }
+    return results;
+  } catch (e) {
+    log(`diagRead failed: ${e.message}`);
+  }
+};
+
+window.readMem32 = async (addr) => {
+  if (!connected) {
+    log("Not connected");
+    return;
+  }
+  try {
+    const val = await backend.adi.readMem32(addr);
+    log(`readMem32(0x${addr.toString(16)}): 0x${val.toString(16)}`);
+    return val;
+  } catch (e) {
+    log(`readMem32 failed: ${e.message}`);
+  }
+};
+
+window.readMemRange = async (startAddr, count) => {
+  if (!connected) {
+    log("Not connected");
+    return;
+  }
+  try {
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const val = await backend.adi.readMem32(startAddr + i * 4);
+      results.push(`0x${val.toString(16)}`);
+    }
+    log(`readMemRange(0x${startAddr.toString(16)}, ${count}): ${results.join(', ')}`);
+    return results;
+  } catch (e) {
+    log(`readMemRange failed: ${e.message}`);
+  }
+};
+
 if (checkCompatibility()) {
   log(`Backend selected: ${selectedBackendName}`);
   updateOperationButtons();
