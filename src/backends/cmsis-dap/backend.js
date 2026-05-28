@@ -4,6 +4,7 @@ import { CmsisDapCore } from "./dap-core.js";
 import { AdiSession } from "./adi.js";
 import { Nrf52Target } from "./nrf52-target.js";
 import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
+import { Nrf52Recovery } from "./nrf52-recovery.js";
 
 export class CmsisDapBackend extends ProbeBackend {
   constructor(progressBus, logger = null, swdClockHz = 1000000) {
@@ -13,6 +14,7 @@ export class CmsisDapBackend extends ProbeBackend {
     this.adi = new AdiSession(this.core);
     this.target = new Nrf52Target(this.adi);
     this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
+    this.recovery = new Nrf52Recovery(this.adi);
   }
 
   async requestDevice() {
@@ -36,11 +38,30 @@ export class CmsisDapBackend extends ProbeBackend {
     const info = await this.core.dapInfo();
     return {
       backend: "cmsis-dap",
-      name: this.transport.device?.productName || "CMSIS-DAP",
-      manufacturer: this.transport.device?.manufacturerName || "Unknown",
+      name: info.product || this.transport.device?.productName || "CMSIS-DAP",
+      manufacturer: info.vendor || this.transport.device?.manufacturerName || "Unknown",
       transport: info.transport,
-      packetSize: info.packetSize
+      packetSize: info.packetSize,
+      maxPacketCount: info.maxPacketCount,
+      maxPacketSize: info.maxPacketSize,
+      capabilities: info.capabilities,
+      hasSWD: info.hasSWD,
+      hasJTAG: info.hasJTAG,
+      hasSWO_UART: info.hasSWO_UART,
+      hasSWO_Manchester: info.hasSWO_Manchester,
+      hasAtomicCommands: info.hasAtomicCommands,
+      hasTestDomainTimer: info.hasTestDomainTimer,
+      hasSWO_Streaming: info.hasSWO_Streaming,
+      hasUART: info.hasUART
     };
+  }
+
+  async checkProtection() {
+    return this.recovery.checkProtection();
+  }
+
+  async recoverDevice(onProgress = null) {
+    return this.recovery.eraseAll(onProgress);
   }
 
   async getTargetInfo() {
@@ -72,7 +93,8 @@ export class CmsisDapBackend extends ProbeBackend {
       supportsReadMemory: true,
       supportsFlash: true,
       supportsVerify: true,
-      supportsReset: true
+      supportsReset: true,
+      supportsRecovery: true
     };
   }
 

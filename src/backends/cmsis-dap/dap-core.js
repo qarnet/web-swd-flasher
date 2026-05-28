@@ -62,14 +62,52 @@ export class CmsisDapCore {
   }
 
   async dapInfo() {
-    const raw = await this.sendCommand(new Uint8Array([0x00, 0x04]));
-    const caps = raw[1];
+    const query = async (id) => {
+      const raw = await this.sendCommand(new Uint8Array([0x00, id]));
+      const len = raw[1];
+      return raw.slice(2, 2 + len);
+    };
+    const dec = (bytes) => {
+      let s = "";
+      for (const b of bytes) s += String.fromCharCode(b);
+      return s;
+    };
+    const vendorBytes = await query(0x01);
+    const productBytes = await query(0x02);
+    const capsBytes = await query(0xF0);
+    const maxCntBytes = await query(0xFE);
+    const maxSzBytes = await query(0xFF);
+    const caps = capsBytes[0] ?? 0;
     return {
       protocol: "cmsis-dap",
       transport: "webusb-bulk",
+      vendor: dec(vendorBytes),
+      product: dec(productBytes),
       packetSize: this.transport.packetSize,
-      capabilities: caps
+      maxPacketCount: maxCntBytes[0] ?? 1,
+      maxPacketSize: maxSzBytes.length >= 2 ? (maxSzBytes[0] | (maxSzBytes[1] << 8)) : this.transport.packetSize,
+      capabilities: caps,
+      hasSWD: (caps & 0x01) !== 0,
+      hasJTAG: (caps & 0x02) !== 0,
+      hasSWO_UART: (caps & 0x04) !== 0,
+      hasSWO_Manchester: (caps & 0x08) !== 0,
+      hasAtomicCommands: (caps & 0x10) !== 0,
+      hasTestDomainTimer: (caps & 0x20) !== 0,
+      hasSWO_Streaming: (caps & 0x40) !== 0,
+      hasUART: (caps & 0x80) !== 0
     };
+  }
+
+  async writeAbort(value = 0x0000001e) {
+    const v = value >>> 0;
+    const payload = new Uint8Array([
+      0x08, 0x00,
+      v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff
+    ]);
+    const resp = await this.sendCommand(payload);
+    if (resp[1] !== 0x00) {
+      throw new Error(`DAP_WriteABORT failed: status=0x${resp[1].toString(16)}`);
+    }
   }
 
   async transfer(port, register, value = null) {

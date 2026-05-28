@@ -25,6 +25,11 @@ const btnFetchHex = document.getElementById("btn-fetch-hex");
 const btnLoadBuiltin = document.getElementById("btn-load-builtin");
 const clockSelect = document.getElementById("clock-select");
 
+const probeCapsEl = document.getElementById("probe-caps");
+const btnCheckProtection = document.getElementById("btn-check-protection");
+const btnRecover = document.getElementById("btn-recover");
+const recoveryStatusEl = document.getElementById("recovery-status");
+
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
 const backendParam = new URLSearchParams(window.location.search).get("backend");
@@ -64,12 +69,36 @@ function renderTargetInfo(probe, target) {
     lines.push(`FICR flash: ${target.ficr.flash}`);
   }
   targetInfoEl.textContent = lines.join("\n");
+
+  if (probe.capabilities !== undefined) {
+    const caps = [];
+    caps.push(`Capabilities: 0x${probe.capabilities.toString(16).padStart(2, "0")}`);
+    caps.push(`  SWD: ${probe.hasSWD ? "yes" : "no"}`);
+    caps.push(`  JTAG: ${probe.hasJTAG ? "yes" : "no"}`);
+    caps.push(`  SWO UART: ${probe.hasSWO_UART ? "yes" : "no"}`);
+    caps.push(`  SWO Manchester: ${probe.hasSWO_Manchester ? "yes" : "no"}`);
+    caps.push(`  Atomic Commands: ${probe.hasAtomicCommands ? "yes" : "no"}`);
+    caps.push(`  Test Domain Timer: ${probe.hasTestDomainTimer ? "yes" : "no"}`);
+    caps.push(`  SWO Streaming: ${probe.hasSWO_Streaming ? "yes" : "no"}`);
+    caps.push(`  UART Port: ${probe.hasUART ? "yes" : "no"}`);
+    caps.push(`Max packet count: ${probe.maxPacketCount}`);
+    caps.push(`Max packet size: ${probe.maxPacketSize}`);
+    probeCapsEl.textContent = caps.join("\n");
+    probeCapsEl.hidden = false;
+  }
 }
 
 function setConnected(connected) {
   window.connectedState = connected;
   btnConnect.disabled = connected;
   btnDisconnect.disabled = !connected;
+  btnCheckProtection.disabled = !connected;
+  btnRecover.disabled = !connected;
+  if (!connected) {
+    probeCapsEl.hidden = true;
+    probeCapsEl.textContent = "";
+    recoveryStatusEl.textContent = "";
+  }
   updateOperationButtons();
 }
 
@@ -262,6 +291,43 @@ async function runReset() {
   }
 }
 
+async function runCheckProtection() {
+  try {
+    recoveryStatusEl.textContent = "Checking...";
+    const result = await backend.checkProtection();
+    const msg = result.locked
+      ? `LOCKED (APPROTECTSTATUS=0x${result.apProtectStatus.toString(16)})`
+      : `Unlocked (APPROTECTSTATUS=0x${result.apProtectStatus.toString(16)})`;
+    recoveryStatusEl.textContent = msg;
+    log(`Protection check: ${msg}`);
+  } catch (error) {
+    const normalized = normalizeError(error);
+    recoveryStatusEl.textContent = `Check failed: ${normalized.message}`;
+    log(`Protection check failed: ${normalized.message}`);
+  }
+}
+
+async function runRecoverDevice() {
+  const confirmed = window.confirm(
+    "WARNING: This will erase ALL flash and UICR on the target.\n\nThis cannot be undone. Continue?"
+  );
+  if (!confirmed) return;
+  try {
+    recoveryStatusEl.textContent = "Erasing...";
+    log("Recovery: starting CTRL-AP mass erase");
+    const result = await backend.recoverDevice((prog) => {
+      recoveryStatusEl.textContent = prog.busy ? "Erase in progress..." : "Erase done, verifying...";
+    });
+    const msg = result.unlocked ? "Recovery complete — device unlocked" : "Erase done but device still reports locked";
+    recoveryStatusEl.textContent = msg;
+    log(`Recovery: ${msg}`);
+  } catch (error) {
+    const normalized = normalizeError(error);
+    recoveryStatusEl.textContent = `Recovery failed: ${normalized.message}`;
+    log(`Recovery failed: ${normalized.message}`);
+  }
+}
+
 async function onBackendChanged(event) {
   const name = event.target.value;
   if (connected) {
@@ -294,6 +360,8 @@ btnLoadBuiltin.addEventListener("click", onLoadBuiltin);
 backendSelect.addEventListener("change", onBackendChanged);
 clockSelect.addEventListener("change", onClockChanged);
 chkConfirmProgram.addEventListener("change", updateOperationButtons);
+btnCheckProtection.addEventListener("click", runCheckProtection);
+btnRecover.addEventListener("click", runRecoverDevice);
 
 progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);

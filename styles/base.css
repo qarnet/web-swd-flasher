@@ -94,3 +94,10 @@ button[disabled] {
   border-radius: 8px;
   overflow: auto;
 }
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}

@@ -38,6 +38,17 @@
         </div>
         <p id="status" class="status">Idle</p>
         <pre id="target-info" class="log"></pre>
+        <pre id="probe-caps" class="log" hidden></pre>
+      </section>
+
+      <section class="panel" id="recovery-panel">
+        <h2>Device Recovery</h2>
+        <p class="hint">Use CTRL-AP mass erase to recover an APPROTECT-locked device. All flash and UICR will be erased.</p>
+        <div class="row">
+          <button id="btn-check-protection" type="button" disabled>Check Protection</button>
+          <button id="btn-recover" type="button" disabled>Recover Device (Mass Erase)</button>
+        </div>
+        <p id="recovery-status" class="status"></p>
       </section>
 
       <section class="panel">
