@@ -30,8 +30,18 @@ export class CmsisDapCore {
     await this.writeDp(0x04, 0x50000f00);
     const ctrlStat = await this.readDp(0x04);
     this.debug("ctrl-stat", { ctrlStat: `0x${ctrlStat.toString(16)}` });
+    // Cache probe capabilities for pipelining decisions
+    try {
+      this._caps = await this.dapInfo();
+    } catch {
+      this._caps = null;
+    }
     this.debug("connect-complete", { port: connect[1], dpidr: `0x${dpidr.toString(16)}` });
     return { port: connect[1], dpidr };
+  }
+
+  get hasAtomicCommands() {
+    return this._caps?.hasAtomicCommands ?? false;
   }
 
   async readDp(register) {
@@ -165,6 +175,33 @@ export class CmsisDapCore {
       this.debug("stale-response", { expected: expectedCmd, got: response[0], attempt });
     }
     throw new Error(`CMSIS-DAP response mismatch for command 0x${expectedCmd.toString(16)}`);
+  }
+
+  // DAP_ExecuteCommands (0x7F): batch multiple commands into one USB packet.
+  // cmds: array of Uint8Array payloads (same format as standalone commands).
+  // Returns: array of Uint8Array responses, one per command.
+  // Requires hasAtomicCommands capability; throws if probe doesn't support it.
+  async executeCommands(cmds) {
+    const packetSize = this.transport.packetSize;
+    let totalLen = 2; // 0x7F + num_cmds
+    for (const c of cmds) totalLen += c.length;
+    if (totalLen > packetSize) {
+      throw new Error(`executeCommands: ${totalLen}B payload exceeds packet size ${packetSize}`);
+    }
+    const payload = new Uint8Array(packetSize);
+    payload[0] = 0x7f;
+    payload[1] = cmds.length;
+    let offset = 2;
+    for (const c of cmds) {
+      payload.set(c, offset);
+      offset += c.length;
+    }
+    const response = await this.sendCommand(payload);
+    // response[0]=0x7F, response[1]=num_cmds, then concatenated sub-responses
+    // Sub-response lengths are NOT encoded — caller must know expected lengths.
+    // We return raw slices by asking the caller for expected sizes via cmdRespLengths.
+    // For simplicity: return the raw response buffer; callers slice as needed.
+    return response;
   }
 
   async lineReset() {

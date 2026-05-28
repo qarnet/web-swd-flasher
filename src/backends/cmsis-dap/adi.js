@@ -38,17 +38,36 @@ export class AdiSession {
   }
 
   async readMem32(address) {
-    await this.selectAp(0, 0);
-    await this.writeAp(0x00, 0x23000052);
-    await this.writeAp(0x04, address >>> 0);
-    return this.readAp(0x0c);
+    // Batch all 4 ops into 1 USB round-trip: [SELECT?], CSW write, TAR write,
+    // AP DRW posted read, DP RDBUFF read. Returns RDBUFF (the actual value).
+    const ops = [];
+    if (this.apSelect !== 0) {
+      ops.push({ port: "dp", register: 0x08, value: 0 });
+      this.apSelect = 0;
+    }
+    ops.push(
+      { port: "ap", register: 0x00, value: 0x23000052 },
+      { port: "ap", register: 0x04, value: address >>> 0 },
+      { port: "ap", register: 0x0c, value: null },
+      { port: "dp", register: 0x0c, value: null }
+    );
+    const reads = await this.dapCore.transferMultiple(ops);
+    return reads[reads.length - 1];
   }
 
   async writeMem32(address, value) {
-    await this.selectAp(0, 0);
-    await this.writeAp(0x00, 0x23000052);
-    await this.writeAp(0x04, address >>> 0);
-    await this.writeAp(0x0c, value >>> 0);
+    // Batch all 3 ops into 1 USB round-trip: [SELECT?], CSW write, TAR write, DRW write.
+    const ops = [];
+    if (this.apSelect !== 0) {
+      ops.push({ port: "dp", register: 0x08, value: 0 });
+      this.apSelect = 0;
+    }
+    ops.push(
+      { port: "ap", register: 0x00, value: 0x23000052 },
+      { port: "ap", register: 0x04, value: address >>> 0 },
+      { port: "ap", register: 0x0c, value: value >>> 0 }
+    );
+    await this.dapCore.transferMultiple(ops);
   }
 
   async readMemBlock(address, lengthBytes) {

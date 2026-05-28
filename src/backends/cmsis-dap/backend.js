@@ -58,7 +58,7 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async getProbeInfo() {
-    const info = await this.core.dapInfo();
+    const info = this.core._caps ?? await this.core.dapInfo();
     return {
       backend: "cmsis-dap",
       name: info.product || this.transport.device?.productName || "CMSIS-DAP",
