@@ -81,12 +81,9 @@ export class Nrf52FlashProgrammer {
 
   async programImage(image) {
     const segments = this.segmentsFromAddresses(image.addresses);
-    const transport = this.adi.dapCore.transport;
-    const dapCore = this.adi.dapCore;
-
-    // Suppress debug logging for the entire operation to avoid DOM overhead.
-    const origLog = transport.log;
-    transport.log = null;
+    const transport = this.adi.dapCore?.transport ?? null;
+    const origLog = transport?.log ?? null;
+    if (transport) transport.log = null;
 
     try {
       this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
@@ -117,7 +114,7 @@ export class Nrf52FlashProgrammer {
       await this.setConfig(0);
       this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
     } finally {
-      transport.log = origLog;
+      if (transport) transport.log = origLog;
     }
   }
 
@@ -127,9 +124,9 @@ export class Nrf52FlashProgrammer {
     const useBlockRead = typeof this.adi.readMemBlockFast === "function";
     let checked = 0;
 
-    const transport = this.adi.dapCore.transport;
-    const origLog = transport.log;
-    transport.log = null;
+    const transport = this.adi.dapCore?.transport ?? null;
+    const origLog = transport?.log ?? null;
+    if (transport) transport.log = null;
 
     try {
 
@@ -189,7 +186,7 @@ export class Nrf52FlashProgrammer {
     this.progressBus.emit({ type: "verify", percent: 100, message: "CMSIS-DAP verify complete" });
 
     } finally {
-      transport.log = origLog;
+      if (transport) transport.log = origLog;
     }
   }
 }
