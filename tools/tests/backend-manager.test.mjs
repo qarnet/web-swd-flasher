@@ -3,32 +3,25 @@ import assert from "node:assert/strict";
 import { BackendManager } from "../../src/core/backend-manager.js";
 import { ProgressBus } from "../../src/core/progress.js";
 
-test("backend manager returns mock backend by default", async () => {
+test("backend manager creates cmsis-dap backend", () => {
+  const bus = new ProgressBus();
+  const manager = new BackendManager(bus);
+  const backend = manager.setBackend("cmsis-dap");
+  assert.equal(backend.capabilities().supportsFlash, true);
+  assert.equal(backend.capabilities().supportsVerify, true);
+  assert.equal(backend.capabilities().supportsReset, true);
+});
+
+test("backend manager setSwdClockHz stores value", () => {
+  const bus = new ProgressBus();
+  const manager = new BackendManager(bus);
+  manager.setSwdClockHz(2000000);
+  assert.equal(manager.swdClockHz, 2000000);
+});
+
+test("backend manager getBackend creates default", () => {
   const bus = new ProgressBus();
   const manager = new BackendManager(bus);
   const backend = manager.getBackend();
-  await backend.requestDevice();
-  await backend.connect();
-  const probe = await backend.getProbeInfo();
-  assert.equal(probe.backend, "mock");
-});
-
-test("progress bus receives backend events", async () => {
-  const bus = new ProgressBus();
-  const manager = new BackendManager(bus);
-  const backend = manager.getBackend();
-  const events = [];
-  bus.subscribe((evt) => events.push(evt.type));
-  await backend.connect();
-  await backend.disconnect();
-  assert.deepEqual(events, ["connect", "disconnect"]);
-});
-
-test("backend manager can switch backend implementations", () => {
-  const bus = new ProgressBus();
-  const manager = new BackendManager(bus);
-  const jlink = manager.setBackend("jlink-webusb");
-  const cmsis = manager.setBackend("cmsis-dap");
-  assert.equal(jlink.capabilities().supportsFlash, true);
-  assert.equal(cmsis.capabilities().supportsVerify, true);
+  assert.equal(backend.capabilities().supportsFlash, true);
 });

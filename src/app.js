@@ -29,7 +29,7 @@ const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
 const backendParam = new URLSearchParams(window.location.search).get("backend");
 const storedBackendName = window.localStorage.getItem("backend-name");
-const selectedBackendName = backendParam || storedBackendName || "mock";
+const selectedBackendName = backendParam || storedBackendName || "cmsis-dap";
 backendSelect.value = selectedBackendName;
 let backend = backendManager.getBackend(selectedBackendName);
 let imageContext = null;
@@ -90,15 +90,7 @@ function checkCompatibility() {
     return false;
   }
 
-  const usesHid = backendSelect.value === "cmsis-dap-webhid";
-  if (usesHid && !navigator.hid) {
-    compatMsg.textContent = "navigator.hid unavailable in this browser profile.";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
-
-  if (!usesHid && !navigator.usb) {
+  if (!navigator.usb) {
     compatMsg.textContent = "navigator.usb unavailable in this browser profile.";
     compatBanner.hidden = false;
     btnConnect.disabled = true;
@@ -278,12 +270,6 @@ async function onBackendChanged(event) {
   backend = backendManager.setBackend(name);
   window.localStorage.setItem("backend-name", name);
   log(`Backend selected: ${name}`);
-  if (name === "jlink-webusb") {
-    log("Note: J-Link requires WebUSB in this app; WebHID is not supported for J-Link debug transport.");
-  }
-  if (name === "cmsis-dap-webhid") {
-    log("Note: CMSIS-DAP WebHID can open without target wiring, but SWD operations require SWDIO/SWDCLK/RESET wiring and target power.");
-  }
   checkCompatibility();
   updateOperationButtons();
 }
