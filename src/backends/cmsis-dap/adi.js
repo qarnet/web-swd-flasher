@@ -88,13 +88,28 @@ export class AdiSession {
     return Math.max(1, Math.floor((packetSize - 4) / 4));
   }
 
+  async writeMemWordByWord(address, words, offset = 0, count = words.length - offset) {
+    await this.selectAp(0, 0);
+    let addr = address >>> 0;
+    for (let i = 0; i < count; i++) {
+      await this.dapCore.transferMultiple([
+        { port: "ap", register: 0x00, value: 0x23000052 },
+        { port: "ap", register: 0x04, value: addr },
+        { port: "ap", register: 0x0c, value: words[offset + i] >>> 0 }
+      ]);
+      addr += 4;
+    }
+  }
+
   async writeMemBlockFast(address, words, offset = 0, count = words.length - offset) {
     const maxWords = this.maxBlockWordCount;
     let pos = offset;
     let addr = address >>> 0;
     const end = offset + count;
     while (pos < end) {
-      const chunkSize = Math.min(maxWords, end - pos);
+      // Clamp chunk to current 1KB region: AHB-AP TAR auto-increment only wraps bits[9:0].
+      const wordsToKbBoundary = Math.max(1, (0x400 - (addr & 0x3ff)) >>> 2);
+      const chunkSize = Math.min(maxWords, wordsToKbBoundary, end - pos);
       await this.selectAp(0, 0);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },
@@ -112,7 +127,9 @@ export class AdiSession {
     let offset = 0;
     let addr = address >>> 0;
     while (offset < wordCount) {
-      const count = Math.min(maxReadWords, wordCount - offset);
+      // Clamp chunk to current 1KB region: AHB-AP TAR auto-increment only wraps bits[9:0].
+      const wordsToKbBoundary = Math.max(1, (0x400 - (addr & 0x3ff)) >>> 2);
+      const count = Math.min(maxReadWords, wordsToKbBoundary, wordCount - offset);
       await this.selectAp(0, 0);
       await this.dapCore.transferMultiple([
         { port: "ap", register: 0x00, value: 0x23000052 },

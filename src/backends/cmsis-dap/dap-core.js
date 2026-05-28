@@ -50,6 +50,12 @@ export class CmsisDapCore {
     this.debug("swj-switch-to-swd-complete");
   }
 
+  async setSWDClock(hz) {
+    this.swdClockHz = hz;
+    const b = [(hz & 0xff), ((hz >>> 8) & 0xff), ((hz >>> 16) & 0xff), ((hz >>> 24) & 0xff)];
+    await this.sendCommand(new Uint8Array([0x11, ...b]));
+  }
+
   async disconnect() {
     await this.sendCommand(new Uint8Array([0x03]));
     await this.transport.close();

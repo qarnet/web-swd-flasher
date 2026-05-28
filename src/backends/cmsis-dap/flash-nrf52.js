@@ -81,54 +81,44 @@ export class Nrf52FlashProgrammer {
 
   async programImage(image) {
     const segments = this.segmentsFromAddresses(image.addresses);
-    const useBlockWrite = typeof this.adi.writeMemBlockFast === "function";
+    const transport = this.adi.dapCore.transport;
+    const dapCore = this.adi.dapCore;
 
-    this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
-    await this.setConfig(2);
+    // Suppress debug logging for the entire operation to avoid DOM overhead.
+    const origLog = transport.log;
+    transport.log = null;
 
-    const pages = this.pagesForSegments(segments);
-    for (let i = 0; i < pages.length; i += 1) {
-      await this.erasePage(pages[i]);
-      const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
-      this.progressBus.emit({ type: "program", percent, message: `Erased page 0x${pages[i].toString(16)}` });
-    }
+    try {
+      this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
+      await this.setConfig(2);
 
-    await this.setConfig(1);
+      const pages = this.pagesForSegments(segments);
+      for (let i = 0; i < pages.length; i += 1) {
+        await this.erasePage(pages[i]);
+        const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
+        this.progressBus.emit({ type: "program", percent, message: `Erased page 0x${pages[i].toString(16)}` });
+      }
 
-    const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
-    let writtenWords = 0;
+      await this.setConfig(1);
 
-    for (const seg of segments) {
-      const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
+      const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
+      let writtenWords = 0;
 
-      if (useBlockWrite) {
+      for (const seg of segments) {
+        const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
         const words = this.buildWordArray(image, seg.start, seg.end);
         await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount);
         writtenWords += segWordCount;
         const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
         this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
-      } else {
-        let currentAddr = seg.start;
-        while (currentAddr <= seg.end) {
-          const b0 = image.data.get(currentAddr) ?? 0xff;
-          const b1 = image.data.get(currentAddr + 1) ?? 0xff;
-          const b2 = image.data.get(currentAddr + 2) ?? 0xff;
-          const b3 = image.data.get(currentAddr + 3) ?? 0xff;
-          const value = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
-          await this.adi.writeMem32(currentAddr, value);
-          writtenWords += 1;
-          currentAddr += 4;
-          if (writtenWords % 128 === 0 || writtenWords === totalWords) {
-            const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
-            this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
-          }
-        }
       }
-    }
 
-    await this.waitReady();
-    await this.setConfig(0);
-    this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
+      await this.waitReady();
+      await this.setConfig(0);
+      this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
+    } finally {
+      transport.log = origLog;
+    }
   }
 
   async verifyImage(image) {
@@ -137,11 +127,11 @@ export class Nrf52FlashProgrammer {
     const useBlockRead = typeof this.adi.readMemBlockFast === "function";
     let checked = 0;
 
-    if (segments.length > 0 && useBlockRead) {
-      const firstAddr = segments[0].start;
-      const singleRead = await this.adi.readMem32(firstAddr);
-      this.progressBus.emit({ type: "verify", percent: 0, message: `Diagnostic read32 at 0x${firstAddr.toString(16)}: 0x${singleRead.toString(16)}` });
-    }
+    const transport = this.adi.dapCore.transport;
+    const origLog = transport.log;
+    transport.log = null;
+
+    try {
 
     for (const seg of segments) {
       const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
@@ -197,5 +187,9 @@ export class Nrf52FlashProgrammer {
       }
     }
     this.progressBus.emit({ type: "verify", percent: 100, message: "CMSIS-DAP verify complete" });
+
+    } finally {
+      transport.log = origLog;
+    }
   }
 }

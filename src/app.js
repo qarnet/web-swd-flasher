@@ -300,6 +300,8 @@ progressBus.subscribe((event) => {
 });
 
 window.diagRead = async (addr = 0x0) => {
+  window._imageContext = imageContext;
+  window._adi = backend.adi;
   if (!connected) {
     log("Not connected");
     return;
@@ -345,6 +347,72 @@ window.readMemRange = async (startAddr, count) => {
   } catch (e) {
     log(`readMemRange failed: ${e.message}`);
   }
+};
+
+window.rawTest = async () => {
+  if (!connected) { log("Not connected"); return; }
+  const adi = backend.adi;
+  const NVMC_BASE = 0x4001e000;
+  const NVMC_READY = NVMC_BASE + 0x400;
+  const NVMC_CONFIG = NVMC_BASE + 0x504;
+  const NVMC_ERASEPAGE = NVMC_BASE + 0x508;
+  const waitRdy = async () => { for (let i = 0; i < 200; i++) { if ((await adi.readMem32(NVMC_READY)) & 1) return; } throw new Error("NVMC not ready"); };
+
+  log("rawTest: erasing page 0x27000...");
+  await adi.writeMem32(NVMC_CONFIG, 2); await waitRdy();
+  await adi.writeMem32(NVMC_ERASEPAGE, 0x27000); await waitRdy();
+
+  log("rawTest: reading erased page...");
+  const e0 = await adi.readMem32(0x27000);
+  const e4 = await adi.readMem32(0x27004);
+  const e8 = await adi.readMem32(0x27008);
+  log(`  erased: 0x27000=0x${e0.toString(16)} 0x27004=0x${e4.toString(16)} 0x27008=0x${e8.toString(16)}`);
+
+  log("rawTest: writing via writeMem32...");
+  await adi.writeMem32(NVMC_CONFIG, 1); await waitRdy();
+  await adi.writeMem32(0x27000, 0xDEADBEEF);
+  await adi.writeMem32(0x27004, 0xCAFEBABE);
+  await adi.writeMem32(0x27008, 0x12345678);
+  await waitRdy();
+  await adi.writeMem32(NVMC_CONFIG, 0); await waitRdy();
+
+  log("rawTest: reading back via readMem32...");
+  const r0 = await adi.readMem32(0x27000);
+  const r4 = await adi.readMem32(0x27004);
+  const r8 = await adi.readMem32(0x27008);
+  log(`  readback: 0x27000=0x${r0.toString(16)} 0x27004=0x${r4.toString(16)} 0x27008=0x${r8.toString(16)}`);
+
+  log(`  match: w0=${r0 === 0xDEADBEEF} w1=${r4 === 0xCAFEBABE} w2=${r8 === 0x12345678}`);
+  return { erased: [e0, e4, e8], readback: [r0, r4, r8] };
+};
+
+window.blockReadTest = async () => {
+  if (!connected) { log("Not connected"); return; }
+  const adi = backend.adi;
+  const maxWords = adi.maxReadBlockWordCount;
+  log(`blockReadTest: maxReadBlockWordCount=${maxWords}`);
+
+  log("blockReadTest: reading 8 words via readMemBlockFast at 0x27000...");
+  const block = await adi.readMemBlockFast(0x27000, 8);
+  log(`  block: ${Array.from(block).map(v => "0x" + v.toString(16)).join(", ")}`);
+
+  log("blockReadTest: reading same 8 words via individual readMem32...");
+  const words = [];
+  for (let i = 0; i < 8; i++) {
+    words.push(await adi.readMem32(0x27000 + i * 4));
+  }
+  log(`  word:  ${words.map(v => "0x" + v.toString(16)).join(", ")}`);
+
+  const matches = Array.from(block).every((v, i) => v === words[i]);
+  log(`  match: ${matches}`);
+  if (!matches) {
+    for (let i = 0; i < 8; i++) {
+      if (block[i] !== words[i]) {
+        log(`  diff at word ${i}: block=0x${block[i].toString(16)} word=0x${words[i].toString(16)}`);
+      }
+    }
+  }
+  return { block: Array.from(block), word: words };
 };
 
 if (checkCompatibility()) {
