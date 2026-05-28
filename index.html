@@ -85,6 +85,7 @@
           <button id="btn-program" type="button" disabled>Program</button>
           <button id="btn-verify" type="button" disabled>Verify</button>
           <button id="btn-reset" type="button" disabled>Reset Run</button>
+          <button id="btn-program-verify-reset" type="button" disabled>Program + Verify + Reset</button>
         </div>
         <label class="confirm">
           <input id="chk-confirm-program" type="checkbox" />
@@ -92,6 +93,19 @@
         </label>
         <p id="image-summary" class="status">No image loaded</p>
         <pre id="image-map" class="log" style="min-height:60px;font-size:0.8rem;"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Debug (Cortex-M)</h2>
+        <p class="hint">Halt/resume/step the Cortex-M core via DHCSR. Target must be connected.</p>
+        <div class="row">
+          <button id="btn-core-halt" type="button" disabled>Halt</button>
+          <button id="btn-core-resume" type="button" disabled>Resume</button>
+          <button id="btn-core-step" type="button" disabled>Step</button>
+          <button id="btn-core-regs" type="button" disabled>Read Registers</button>
+        </div>
+        <p id="debug-status" class="status"></p>
+        <pre id="debug-regs" class="log" style="min-height:40px;font-size:0.8rem;"></pre>
       </section>
 
       <section class="panel">
@@ -104,9 +118,20 @@
           <button id="btn-mem-read" type="button" disabled>Read</button>
           <button id="btn-mem-read-flash" type="button" disabled>Read All Flash</button>
           <button id="btn-mem-export" type="button" disabled>Export .bin</button>
+          <button id="btn-mem-export-hex" type="button" disabled>Export .hex</button>
         </div>
         <p id="mem-status" class="status"></p>
         <pre id="mem-dump" class="log" style="min-height:60px;font-size:0.75rem;overflow:auto;max-height:300px;"></pre>
+      </section>
+
+      <section class="panel" id="uicr-panel">
+        <h2>UICR (nRF52)</h2>
+        <p class="hint">User Information Configuration Registers. Read-only unless device is unlocked and NVMC write-enabled.</p>
+        <div class="row">
+          <button id="btn-uicr-read" type="button" disabled>Read UICR</button>
+        </div>
+        <p id="uicr-status" class="status"></p>
+        <pre id="uicr-dump" class="log" style="min-height:60px;font-size:0.8rem;"></pre>
       </section>
 
       <section class="panel">
@@ -132,6 +157,20 @@
           <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
           <button id="btn-rtt-send" type="button" disabled>Send</button>
         </div>
+      </section>
+
+      <section class="panel" id="swo-panel" hidden>
+        <h2>SWO / ITM Trace</h2>
+        <p class="hint">Serial Wire Output trace via DAP_SWO_* (CMSIS-DAP v1.3). Probe must report capability bit 2 (SWO UART) or bit 3 (SWO Manchester).</p>
+        <div class="row">
+          <label for="swo-baud-input">Baud rate</label>
+          <input id="swo-baud-input" type="text" value="1000000" style="width:9rem;" />
+          <button id="btn-swo-open" type="button" disabled>Open</button>
+          <button id="btn-swo-close" type="button" disabled>Close</button>
+          <button id="btn-swo-clear" type="button">Clear</button>
+        </div>
+        <p id="swo-status" class="status"></p>
+        <pre id="swo-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
       </section>
 
       <section class="panel" id="uart-panel">
