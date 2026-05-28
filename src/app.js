@@ -47,6 +47,11 @@ const btnRttSend = document.getElementById("btn-rtt-send");
 const rttRamStartInput = document.getElementById("rtt-ram-start");
 const rttRamSizeInput = document.getElementById("rtt-ram-size");
 const rttIntervalInput = document.getElementById("rtt-interval");
+const statusLed = document.getElementById("status-led");
+const topbarTarget = document.getElementById("topbar-target");
+const btnTheme = document.getElementById("btn-theme");
+const progressBar = document.getElementById("progress-bar");
+const progressFill = document.getElementById("progress-fill");
 
 const memAddrInput = document.getElementById("mem-addr-input");
 const memLenInput = document.getElementById("mem-len-input");
@@ -55,6 +60,18 @@ const btnMemReadFlash = document.getElementById("btn-mem-read-flash");
 const btnMemExport = document.getElementById("btn-mem-export");
 const memStatusEl = document.getElementById("mem-status");
 const memDumpEl = document.getElementById("mem-dump");
+
+// --- Theme ---
+(function initTheme() {
+  const saved = localStorage.getItem("theme") || "light";
+  if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  btnTheme?.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+  });
+})();
 
 // --- App state ---
 const progressBus = new ProgressBus();
@@ -144,8 +161,20 @@ function populateTargetSelector() {
 }
 
 // --- Connection state ---
+function setProgress(percent) {
+  if (percent === null) {
+    progressBar.hidden = true;
+    progressFill.style.width = "0%";
+  } else {
+    progressBar.hidden = false;
+    progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  }
+}
+
 function setConnected(isConnected) {
   window.connectedState = isConnected;
+  statusLed.classList.toggle("on", isConnected);
+  topbarTarget.textContent = isConnected ? (backend.activeTarget?.label ?? "Connected") : "Not connected";
   btnConnect.disabled = isConnected;
   btnDisconnect.disabled = !isConnected;
   btnCheckProtection.disabled = !isConnected;
@@ -733,6 +762,7 @@ targetSelect.addEventListener("change", () => {
   const val = targetSelect.value;
   try {
     backend.setTargetOverride(val === "auto" ? null : val);
+    topbarTarget.textContent = backend.activeTarget?.label ?? "Connected";
     log(`Target override: ${val === "auto" ? "auto-detect" : val}`);
     mergeAndUpdate();
     refreshVisualizer();
@@ -743,6 +773,14 @@ targetSelect.addEventListener("change", () => {
 
 progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);
+  if (typeof event.percent === "number") {
+    setProgress(event.percent < 100 ? event.percent : null);
+  }
+});
+
+// Collapsible event log
+logEl.addEventListener("click", () => {
+  logEl.classList.toggle("log-collapsed");
 });
 
 // --- Console debug helpers ---

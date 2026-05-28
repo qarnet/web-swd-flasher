@@ -7,9 +7,13 @@
     <link rel="stylesheet" href="styles/base.css" />
   </head>
   <body>
-    <main class="app">
+    <div class="topbar">
+      <span class="led" id="status-led"></span>
       <h1>Web SWD Flasher</h1>
-      <p class="sub">nRF52 flashing over USB debug probes</p>
+      <span id="topbar-target">Not connected</span>
+      <button class="btn-icon" id="btn-theme" type="button" title="Toggle dark mode">🌙</button>
+    </div>
+    <main class="app">
 
       <section id="compat-banner" class="banner" hidden>
         <strong>WebUSB unavailable:</strong>
@@ -41,6 +45,9 @@
           <select id="target-select" disabled>
             <option value="auto">Auto-detect</option>
           </select>
+        </div>
+        <div class="progress-bar" id="progress-bar" hidden>
+          <div class="progress-bar-fill" id="progress-fill"></div>
         </div>
         <p id="status" class="status">Idle</p>
         <pre id="target-info" class="log"></pre>
@@ -129,7 +136,7 @@
 
       <section class="panel">
         <h2>Event Log</h2>
-        <pre id="log" class="log"></pre>
+        <pre id="log" class="log log-collapsed"></pre>
       </section>
     </main>
 
