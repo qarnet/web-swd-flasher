@@ -7,6 +7,7 @@ import { FILE_COLORS, mergeHexFiles } from "./hex/multi-hex-merger.js";
 import { validateAppRange } from "./nrf/nrf52-memory-map.js";
 import { formatFicrInfo } from "./nrf/nrf52-ficr.js";
 import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
+import { RttClient } from "./rtt/rtt-client.js";
 
 // --- DOM refs ---
 const compatBanner = document.getElementById("compat-banner");
@@ -35,6 +36,18 @@ const recoveryStatusEl = document.getElementById("recovery-status");
 const targetSelect = document.getElementById("target-select");
 const fileListEl = document.getElementById("file-list");
 const flashVisualizerEl = document.getElementById("flash-visualizer");
+const btnRttSearch = document.getElementById("btn-rtt-search");
+const btnRttStart = document.getElementById("btn-rtt-start");
+const btnRttStop = document.getElementById("btn-rtt-stop");
+const btnRttClear = document.getElementById("btn-rtt-clear");
+const rttStatusEl = document.getElementById("rtt-status");
+const rttLogEl = document.getElementById("rtt-log");
+const rttTxInput = document.getElementById("rtt-tx-input");
+const btnRttSend = document.getElementById("btn-rtt-send");
+const rttRamStartInput = document.getElementById("rtt-ram-start");
+const rttRamSizeInput = document.getElementById("rtt-ram-size");
+const rttIntervalInput = document.getElementById("rtt-interval");
+
 const memAddrInput = document.getElementById("mem-addr-input");
 const memLenInput = document.getElementById("mem-len-input");
 const btnMemRead = document.getElementById("btn-mem-read");
@@ -56,6 +69,7 @@ let nextFileId = 0;
 let imageContext = null;
 let connected = false;
 let lastReadData = null;  // {addr, bytes: Uint8Array} — for export
+let rttClient = null;
 let readRegions = [];     // [{start, size, ok}] — for visualizer overlay
 
 // --- Logging ---
@@ -139,7 +153,14 @@ function setConnected(isConnected) {
   targetSelect.disabled = !isConnected;
   btnMemRead.disabled = !isConnected;
   btnMemReadFlash.disabled = !isConnected;
+  btnRttSearch.disabled = !isConnected;
   if (!isConnected) {
+    if (rttClient) { rttClient.stop(); rttClient = null; }
+    btnRttStart.disabled = true;
+    btnRttStop.disabled = true;
+    rttTxInput.disabled = true;
+    btnRttSend.disabled = true;
+    rttStatusEl.textContent = "";
     probeCapsEl.hidden = true;
     probeCapsEl.textContent = "";
     recoveryStatusEl.textContent = "";
@@ -585,6 +606,84 @@ function exportMemoryBin() {
   URL.revokeObjectURL(url);
 }
 
+// --- RTT ---
+function rttLog(msg) {
+  rttLogEl.textContent += msg;
+  rttLogEl.scrollTop = rttLogEl.scrollHeight;
+}
+
+async function runRttSearch() {
+  if (rttClient) { rttClient.stop(); rttClient = null; }
+  const ramStart = parseHexInput(rttRamStartInput.value);
+  const ramSizeKb = parseInt(rttRamSizeInput.value, 10);
+  if (isNaN(ramStart) || isNaN(ramSizeKb) || ramSizeKb <= 0) {
+    rttStatusEl.textContent = "Invalid RAM range";
+    return;
+  }
+  const ramSize = ramSizeKb * 1024;
+  rttStatusEl.textContent = `Searching 0x${ramStart.toString(16)} + ${ramSizeKb}KB…`;
+  btnRttSearch.disabled = true;
+  btnRttStart.disabled = true;
+
+  rttClient = new RttClient(backend.adi);
+  try {
+    const found = await rttClient.search(ramStart, ramSize);
+    if (found) {
+      rttStatusEl.textContent = `Control block at 0x${rttClient.controlBlockAddr.toString(16)} — ${rttClient._upChannels.length} up, ${rttClient._downChannels.length} down channel(s)`;
+      btnRttStart.disabled = false;
+      if (rttClient._downChannels.length > 0) {
+        rttTxInput.disabled = false;
+        btnRttSend.disabled = false;
+      }
+    } else {
+      rttStatusEl.textContent = "RTT control block not found in RAM range";
+      rttClient = null;
+    }
+  } catch (error) {
+    rttStatusEl.textContent = `Search failed: ${normalizeError(error).message}`;
+    rttClient = null;
+  }
+  btnRttSearch.disabled = !connected;
+}
+
+function runRttStart() {
+  if (!rttClient) return;
+  const intervalMs = parseInt(rttIntervalInput.value, 10) || 50;
+  rttClient
+    .on("data", ({ channel, data }) => {
+      const text = new TextDecoder().decode(data);
+      rttLog(text);
+    })
+    .on("error", (err) => {
+      rttStatusEl.textContent = `Poll error: ${err.message}`;
+    });
+  rttClient.startPolling(intervalMs);
+  rttStatusEl.textContent = `Polling channel(s) every ${intervalMs}ms…`;
+  btnRttStart.disabled = true;
+  btnRttStop.disabled = false;
+}
+
+function runRttStop() {
+  if (!rttClient) return;
+  rttClient.stop();
+  rttStatusEl.textContent = "Stopped";
+  btnRttStart.disabled = false;
+  btnRttStop.disabled = true;
+}
+
+async function runRttSend() {
+  if (!rttClient) return;
+  const text = rttTxInput.value;
+  if (!text) return;
+  try {
+    const bytes = new TextEncoder().encode(text + "\n");
+    await rttClient.write(0, bytes);
+    rttTxInput.value = "";
+  } catch (error) {
+    rttStatusEl.textContent = `Send failed: ${normalizeError(error).message}`;
+  }
+}
+
 // --- Backend / clock change ---
 async function onBackendChanged(event) {
   const name = event.target.value;
@@ -621,6 +720,12 @@ btnRecover.addEventListener("click", runRecoverDevice);
 btnMemRead.addEventListener("click", runReadMemory);
 btnMemReadFlash.addEventListener("click", runReadAllFlash);
 btnMemExport.addEventListener("click", exportMemoryBin);
+btnRttSearch.addEventListener("click", runRttSearch);
+btnRttStart.addEventListener("click", runRttStart);
+btnRttStop.addEventListener("click", runRttStop);
+btnRttClear.addEventListener("click", () => { rttLogEl.textContent = ""; });
+btnRttSend.addEventListener("click", runRttSend);
+rttTxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runRttSend(); });
 
 document.getElementById("flash-mode-select").addEventListener("change", () => mergeAndUpdate());
 

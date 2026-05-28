@@ -103,6 +103,31 @@
       </section>
 
       <section class="panel">
+        <h2>RTT (Real-Time Transfer)</h2>
+        <p class="hint">Searches target RAM for SEGGER RTT control block, then polls ring buffer. Target must be running firmware with RTT initialized.</p>
+        <div class="row">
+          <label for="rtt-ram-start">RAM start</label>
+          <input id="rtt-ram-start" type="text" value="0x20000000" style="width:10rem;" />
+          <label for="rtt-ram-size">RAM size (KB)</label>
+          <input id="rtt-ram-size" type="text" value="256" style="width:6rem;" />
+          <label for="rtt-interval">Poll ms</label>
+          <input id="rtt-interval" type="number" value="50" min="10" max="500" style="width:5rem;" />
+        </div>
+        <div class="row">
+          <button id="btn-rtt-search" type="button" disabled>Search</button>
+          <button id="btn-rtt-start" type="button" disabled>Start Polling</button>
+          <button id="btn-rtt-stop" type="button" disabled>Stop</button>
+          <button id="btn-rtt-clear" type="button">Clear Log</button>
+        </div>
+        <p id="rtt-status" class="status"></p>
+        <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <div class="row" style="margin-top:0.5rem;">
+          <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
+          <button id="btn-rtt-send" type="button" disabled>Send</button>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>Event Log</h2>
         <pre id="log" class="log"></pre>
       </section>
