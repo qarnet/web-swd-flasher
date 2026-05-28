@@ -60,15 +60,20 @@
       <section class="panel">
         <h2>Firmware Image</h2>
         <div class="row">
-          <input id="file-input" type="file" accept=".hex,.ihex" />
-          <input id="url-input" type="text" placeholder="or fetch .hex URL…" value="test-blinky.hex" />
+          <input id="file-input" type="file" accept=".hex,.ihex" multiple />
+          <input id="url-input" type="text" placeholder="or add .hex URL…" value="test-blinky.hex" />
           <select id="flash-mode-select">
             <option value="app-only">App only (0x26000+)</option>
             <option value="full-flash" selected>Full flash (0x0+)</option>
           </select>
-          <button id="btn-fetch-hex" type="button">Fetch</button>
+          <button id="btn-fetch-hex" type="button">Fetch URL</button>
           <button id="btn-load-builtin" type="button">Load Blinky</button>
+          <button id="btn-clear-hex" type="button">Clear All</button>
         </div>
+
+        <div id="file-list" style="margin-top:0.5rem;"></div>
+        <div id="flash-visualizer" style="margin:0.75rem 0;"></div>
+
         <div class="row">
           <button id="btn-program" type="button" disabled>Program</button>
           <button id="btn-verify" type="button" disabled>Verify</button>
@@ -79,7 +84,22 @@
           I reviewed target info and image map; allow flash operations.
         </label>
         <p id="image-summary" class="status">No image loaded</p>
-        <pre id="image-map" class="log"></pre>
+        <pre id="image-map" class="log" style="min-height:60px;font-size:0.8rem;"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Memory Read</h2>
+        <div class="row">
+          <label for="mem-addr-input">Address</label>
+          <input id="mem-addr-input" type="text" value="0x0" style="width:10rem;" />
+          <label for="mem-len-input">Length (bytes)</label>
+          <input id="mem-len-input" type="text" value="256" style="width:8rem;" />
+          <button id="btn-mem-read" type="button" disabled>Read</button>
+          <button id="btn-mem-read-flash" type="button" disabled>Read All Flash</button>
+          <button id="btn-mem-export" type="button" disabled>Export .bin</button>
+        </div>
+        <p id="mem-status" class="status"></p>
+        <pre id="mem-dump" class="log" style="min-height:60px;font-size:0.75rem;overflow:auto;max-height:300px;"></pre>
       </section>
 
       <section class="panel">

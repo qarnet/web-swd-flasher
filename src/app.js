@@ -3,9 +3,12 @@ import { normalizeError } from "./core/errors.js";
 import { ProgressBus } from "./core/progress.js";
 import { parseIntelHexFileText } from "./hex/intel-hex-parser.js";
 import { buildImageMap, formatImageMap } from "./hex/image-map.js";
+import { FILE_COLORS, mergeHexFiles } from "./hex/multi-hex-merger.js";
 import { validateAppRange } from "./nrf/nrf52-memory-map.js";
 import { formatFicrInfo } from "./nrf/nrf52-ficr.js";
+import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
 
+// --- DOM refs ---
 const compatBanner = document.getElementById("compat-banner");
 const compatMsg = document.getElementById("compat-msg");
 const btnConnect = document.getElementById("btn-connect");
@@ -23,14 +26,24 @@ const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
 const btnFetchHex = document.getElementById("btn-fetch-hex");
 const btnLoadBuiltin = document.getElementById("btn-load-builtin");
+const btnClearHex = document.getElementById("btn-clear-hex");
 const clockSelect = document.getElementById("clock-select");
-
 const probeCapsEl = document.getElementById("probe-caps");
 const btnCheckProtection = document.getElementById("btn-check-protection");
 const btnRecover = document.getElementById("btn-recover");
 const recoveryStatusEl = document.getElementById("recovery-status");
 const targetSelect = document.getElementById("target-select");
+const fileListEl = document.getElementById("file-list");
+const flashVisualizerEl = document.getElementById("flash-visualizer");
+const memAddrInput = document.getElementById("mem-addr-input");
+const memLenInput = document.getElementById("mem-len-input");
+const btnMemRead = document.getElementById("btn-mem-read");
+const btnMemReadFlash = document.getElementById("btn-mem-read-flash");
+const btnMemExport = document.getElementById("btn-mem-export");
+const memStatusEl = document.getElementById("mem-status");
+const memDumpEl = document.getElementById("mem-dump");
 
+// --- App state ---
 const progressBus = new ProgressBus();
 const backendManager = new BackendManager(progressBus, (message) => log(message));
 const backendParam = new URLSearchParams(window.location.search).get("backend");
@@ -38,9 +51,14 @@ const storedBackendName = window.localStorage.getItem("backend-name");
 const selectedBackendName = backendParam || storedBackendName || "cmsis-dap";
 backendSelect.value = selectedBackendName;
 let backend = backendManager.getBackend(selectedBackendName);
+let hexFiles = [];  // [{id, name, parsed, color}]
+let nextFileId = 0;
 let imageContext = null;
 let connected = false;
+let lastReadData = null;  // {addr, bytes: Uint8Array} — for export
+let readRegions = [];     // [{start, size, ok}] — for visualizer overlay
 
+// --- Logging ---
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}`;
   logEl.textContent += `${line}\n`;
@@ -52,6 +70,7 @@ function setStatus(message) {
   log(message);
 }
 
+// --- Target info rendering ---
 function renderTargetInfo(probe, target) {
   const lines = [];
   lines.push(`Backend: ${probe.backend}`);
@@ -97,6 +116,7 @@ function renderTargetInfo(probe, target) {
   }
 }
 
+// --- Target selector ---
 function populateTargetSelector() {
   const targets = backend.availableTargets ?? [];
   while (targetSelect.options.length > 1) targetSelect.remove(1);
@@ -109,6 +129,7 @@ function populateTargetSelector() {
   }
 }
 
+// --- Connection state ---
 function setConnected(isConnected) {
   window.connectedState = isConnected;
   btnConnect.disabled = isConnected;
@@ -116,11 +137,14 @@ function setConnected(isConnected) {
   btnCheckProtection.disabled = !isConnected;
   btnRecover.disabled = !isConnected;
   targetSelect.disabled = !isConnected;
+  btnMemRead.disabled = !isConnected;
+  btnMemReadFlash.disabled = !isConnected;
   if (!isConnected) {
     probeCapsEl.hidden = true;
     probeCapsEl.textContent = "";
     recoveryStatusEl.textContent = "";
     targetSelect.value = "auto";
+    readRegions = [];
   }
   updateOperationButtons();
 }
@@ -134,6 +158,7 @@ function updateOperationButtons() {
   btnReset.disabled = !(connected && caps.supportsReset);
 }
 
+// --- Compatibility check ---
 function checkCompatibility() {
   if (!window.isSecureContext) {
     compatMsg.textContent = "Secure context required (use localhost).";
@@ -141,18 +166,131 @@ function checkCompatibility() {
     btnConnect.disabled = true;
     return false;
   }
-
   if (!navigator.usb) {
     compatMsg.textContent = "navigator.usb unavailable in this browser profile.";
     compatBanner.hidden = false;
     btnConnect.disabled = true;
     return false;
   }
-
   compatBanner.hidden = true;
   return true;
 }
 
+// --- Multi-hex file management ---
+function activeTargetForValidation() {
+  return connected ? backend.activeTarget : null;
+}
+
+function mergeAndUpdate() {
+  if (hexFiles.length === 0) {
+    imageContext = null;
+    imageSummary.textContent = "No image loaded";
+    imageMapEl.textContent = "";
+    updateOperationButtons();
+    refreshVisualizer();
+    return;
+  }
+
+  const mode = document.getElementById("flash-mode-select").value;
+  const { conflicts, merged } = mergeHexFiles(hexFiles);
+
+  if (conflicts.length > 0) {
+    for (const c of conflicts) {
+      log(`Conflict at 0x${c.addr.toString(16)}: ${c.fileA}=0x${c.valueA.toString(16)} vs ${c.fileB}=0x${c.valueB.toString(16)}`);
+    }
+    imageSummary.textContent = `⚠ ${conflicts.length} address conflict(s) between loaded files.`;
+    imageContext = null;
+    imageMapEl.textContent = "";
+    updateOperationButtons();
+    refreshVisualizer();
+    return;
+  }
+
+  if (!merged) {
+    imageContext = null;
+    imageSummary.textContent = "No data after merge";
+    updateOperationButtons();
+    refreshVisualizer();
+    return;
+  }
+
+  const map = buildImageMap(merged);
+  const policy = validateAppRange(map, mode, activeTargetForValidation());
+  imageContext = { parsed: merged, map, policy, mode };
+  imageMapEl.textContent = formatImageMap(map);
+
+  if (policy.ok) {
+    const names = hexFiles.map((f) => f.name).join(", ");
+    imageSummary.textContent = `${merged.byteCount} bytes from ${hexFiles.length} file(s) — OK (mode: ${mode})`;
+    log(`Image accepted: ${names} (mode: ${mode})`);
+  } else {
+    imageSummary.textContent = "Image rejected by range policy.";
+    for (const issue of policy.violations) {
+      log(`Policy violation: ${issue}`);
+    }
+  }
+  updateOperationButtons();
+  refreshVisualizer();
+}
+
+function addHexFromText(name, text) {
+  try {
+    const parsed = parseIntelHexFileText(text);
+    const color = FILE_COLORS[nextFileId % FILE_COLORS.length];
+    hexFiles.push({ id: nextFileId++, name, parsed, color });
+    renderFileList();
+    mergeAndUpdate();
+  } catch (error) {
+    log(`Parse failed (${name}): ${error.message}`);
+  }
+}
+
+function renderFileList() {
+  if (hexFiles.length === 0) {
+    fileListEl.innerHTML = "";
+    return;
+  }
+  const items = hexFiles.map((f) => {
+    const segs = buildImageMap(f.parsed).segments.length;
+    return `<div class="file-item" style="display:flex;align-items:center;gap:0.5rem;margin:0.25rem 0;">
+      <span style="width:14px;height:14px;border-radius:3px;background:${f.color};flex-shrink:0;"></span>
+      <span style="flex:1;font-size:0.85rem;">${escHtml(f.name)} <small style="color:#6b7280;">(${f.parsed.byteCount}B, ${segs} seg)</small></span>
+      <button type="button" data-remove-id="${f.id}" style="padding:0.2rem 0.5rem;font-size:0.75rem;">✕</button>
+    </div>`;
+  }).join("");
+  fileListEl.innerHTML = items;
+  fileListEl.querySelectorAll("[data-remove-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = parseInt(btn.dataset.removeId, 10);
+      hexFiles = hexFiles.filter((f) => f.id !== id);
+      renderFileList();
+      mergeAndUpdate();
+    });
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// --- Flash visualizer ---
+function refreshVisualizer() {
+  const tgt = connected ? backend.activeTarget : null;
+  const files = hexFiles.map((f) => ({
+    name: f.name,
+    color: f.color,
+    segments: buildImageMap(f.parsed).segments
+  }));
+  renderFlashVisualizer(flashVisualizerEl, {
+    flashStart: tgt?.flash?.start ?? 0,
+    flashSize: tgt?.flash?.size ?? 1024 * 1024,
+    targetId: tgt?.id ?? null,
+    files,
+    readRegions
+  });
+}
+
+// --- Connect / disconnect ---
 async function connectProbe() {
   const name = backendSelect.value;
   backend = backendManager.setBackend(name);
@@ -178,6 +316,7 @@ async function connectProbe() {
     if (target.ficr) {
       log(`FICR: ${formatFicrInfo(target.ficr)}`);
     }
+    refreshVisualizer();
   } catch (error) {
     const normalized = normalizeError(error);
     setStatus(`Connect failed (${normalized.code}): ${normalized.message}`);
@@ -194,91 +333,62 @@ async function disconnectProbe() {
   setConnected(false);
   setStatus("Disconnected");
   targetInfoEl.textContent = "";
+  refreshVisualizer();
 }
 
+// --- Hex loading ---
 async function onFetchHex() {
   const url = document.getElementById("url-input").value.trim();
-  const mode = document.getElementById("flash-mode-select").value;
   if (!url) return;
   setStatus("Fetching hex…");
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
-    loadHexText(text, mode);
+    const name = url.split("/").pop() || url;
+    addHexFromText(name, text);
+    setStatus("Ready");
   } catch (error) {
-    imageContext = null;
-    imageSummary.textContent = `Fetch failed: ${error.message}`;
     log(`Fetch failed: ${error.message}`);
-    updateOperationButtons();
     setStatus("Ready");
   }
 }
 
 async function onLoadBuiltin() {
-  const mode = document.getElementById("flash-mode-select").value;
   setStatus("Loading built-in firmware…");
   try {
     const response = await fetch("test-blinky.hex");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
-    loadHexText(text, mode);
+    addHexFromText("blinky.hex", text);
+    setStatus("Ready");
   } catch (error) {
-    imageContext = null;
-    imageSummary.textContent = `Built-in load failed: ${error.message}`;
     log(`Built-in load failed: ${error.message}`);
-    updateOperationButtons();
-    setStatus("Ready");
-  }
-}
-
-function loadHexText(text, mode = "app-only") {
-  try {
-    const parsed = parseIntelHexFileText(text);
-    const map = buildImageMap(parsed);
-    const activeTarget = connected ? backend.activeTarget : null;
-    const policy = validateAppRange(map, mode, activeTarget);
-    imageContext = { parsed, map, policy, mode };
-    imageMapEl.textContent = formatImageMap(map);
-    if (policy.ok) {
-      imageSummary.textContent = `Image accepted (${parsed.byteCount} bytes, mode: ${mode}).`;
-      log(`Firmware image passed range policy checks (mode: ${mode}).`);
-    } else {
-      imageSummary.textContent = "Image rejected by range policy.";
-      for (const issue of policy.violations) {
-        log(`Policy violation: ${issue}`);
-      }
-    }
-    updateOperationButtons();
-    setStatus("Ready");
-  } catch (error) {
-    imageContext = null;
-    imageMapEl.textContent = "";
-    imageSummary.textContent = `Image parse failed: ${error.message}`;
-    log(`Image parse failed: ${error.message}`);
-    updateOperationButtons();
     setStatus("Ready");
   }
 }
 
 async function onFirmwareSelected(event) {
-  const file = event.target.files?.[0];
-  if (!file) {
-    return;
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      addHexFromText(file.name, text);
+    } catch (error) {
+      log(`File read failed (${file.name}): ${error.message}`);
+    }
   }
-
-  try {
-    const text = await file.text();
-    const mode = document.getElementById("flash-mode-select").value;
-    loadHexText(text, mode);
-  } catch (error) {
-    imageContext = null;
-    imageSummary.textContent = `File read failed: ${error.message}`;
-    log(`File read failed: ${error.message}`);
-    updateOperationButtons();
-  }
+  event.target.value = "";
 }
 
+function onClearHex() {
+  hexFiles = [];
+  renderFileList();
+  mergeAndUpdate();
+}
+
+// --- Flash operations ---
 async function runProgram() {
   if (!imageContext?.policy?.ok) {
     setStatus("Program blocked: image is missing or failed policy checks");
@@ -286,7 +396,7 @@ async function runProgram() {
   }
   try {
     setStatus("Programming image...");
-    await backend.programImage(imageContext.parsed, { mode: "app-only" });
+    await backend.programImage(imageContext.parsed, { mode: imageContext.mode });
     setStatus("Program complete");
   } catch (error) {
     const normalized = normalizeError(error);
@@ -301,8 +411,13 @@ async function runVerify() {
   }
   try {
     setStatus("Verifying image...");
-    await backend.verifyImage(imageContext.parsed, { mode: "app-only" });
+    await backend.verifyImage(imageContext.parsed, { mode: imageContext.mode });
     setStatus("Verify complete");
+    // Mark verified regions on the visualizer
+    if (imageContext.map) {
+      readRegions = imageContext.map.segments.map((s) => ({ start: s.start, size: s.length, ok: true }));
+      refreshVisualizer();
+    }
   } catch (error) {
     const normalized = normalizeError(error);
     setStatus(`Verify failed (${normalized.code}): ${normalized.message}`);
@@ -320,6 +435,7 @@ async function runReset() {
   }
 }
 
+// --- Recovery ---
 async function runCheckProtection() {
   try {
     recoveryStatusEl.textContent = "Checking...";
@@ -357,11 +473,122 @@ async function runRecoverDevice() {
   }
 }
 
+// --- Memory read ---
+function parseHexInput(s) {
+  const t = s.trim();
+  if (t.startsWith("0x") || t.startsWith("0X")) return parseInt(t, 16);
+  return parseInt(t, 10);
+}
+
+function formatHexDump(startAddr, bytes) {
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = bytes.slice(i, i + 16);
+    const addrStr = (startAddr + i).toString(16).padStart(8, "0");
+    const hexParts = [];
+    const asciiParts = [];
+    for (let j = 0; j < 16; j++) {
+      if (j < chunk.length) {
+        hexParts.push(chunk[j].toString(16).padStart(2, "0"));
+        const c = chunk[j];
+        asciiParts.push(c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : ".");
+      } else {
+        hexParts.push("  ");
+        asciiParts.push(" ");
+      }
+    }
+    lines.push(`${addrStr}: ${hexParts.slice(0, 8).join(" ")}  ${hexParts.slice(8).join(" ")}  ${asciiParts.join("")}`);
+  }
+  return lines.join("\n");
+}
+
+async function runReadMemory() {
+  const addr = parseHexInput(memAddrInput.value);
+  const lenBytes = parseHexInput(memLenInput.value);
+  if (isNaN(addr) || isNaN(lenBytes) || lenBytes <= 0) {
+    memStatusEl.textContent = "Invalid address or length";
+    return;
+  }
+  const wordCount = Math.ceil(lenBytes / 4);
+  memStatusEl.textContent = "Reading...";
+  memDumpEl.textContent = "";
+  btnMemExport.disabled = true;
+  try {
+    const words = await backend.adi.readMemBlockFast(addr, wordCount);
+    const bytes = new Uint8Array(words.buffer).slice(0, lenBytes);
+    lastReadData = { addr, bytes };
+    memDumpEl.textContent = formatHexDump(addr, bytes);
+    memStatusEl.textContent = `Read ${bytes.length} bytes at 0x${addr.toString(16)}`;
+    btnMemExport.disabled = false;
+    // Show region on visualizer
+    readRegions = [{ start: addr, size: bytes.length, ok: true }];
+    refreshVisualizer();
+  } catch (error) {
+    const normalized = normalizeError(error);
+    memStatusEl.textContent = `Read failed: ${normalized.message}`;
+    readRegions = [{ start: addr, size: lenBytes, ok: false }];
+    refreshVisualizer();
+  }
+}
+
+async function runReadAllFlash() {
+  if (!connected) return;
+  const tgt = backend.activeTarget;
+  const flashStart = tgt?.flash?.start ?? 0;
+  const flashSize = tgt?.flash?.size ?? 1024 * 1024;
+  const wordCount = flashSize / 4;
+  const chunkWords = backend.adi.maxReadBlockWordCount * 16; // batch multiple blocks
+
+  memStatusEl.textContent = "Reading flash...";
+  memDumpEl.textContent = "";
+  btnMemExport.disabled = true;
+
+  const allWords = new Uint32Array(wordCount);
+  let offset = 0;
+  const transport = backend.core.transport;
+  const origLog = transport.log;
+  transport.log = null;
+  try {
+    while (offset < wordCount) {
+      const count = Math.min(chunkWords, wordCount - offset);
+      const chunk = await backend.adi.readMemBlockFast(flashStart + offset * 4, count);
+      allWords.set(chunk, offset);
+      offset += count;
+      const percent = Math.round((offset / wordCount) * 100);
+      memStatusEl.textContent = `Reading flash... ${percent}%`;
+    }
+    const bytes = new Uint8Array(allWords.buffer);
+    lastReadData = { addr: flashStart, bytes };
+    memDumpEl.textContent = formatHexDump(flashStart, bytes.slice(0, 256)); // show first 256B in dump
+    memStatusEl.textContent = `Read ${bytes.length} bytes of flash (showing first 256B, export for full)`;
+    btnMemExport.disabled = false;
+    readRegions = [{ start: flashStart, size: flashSize, ok: true }];
+    refreshVisualizer();
+  } catch (error) {
+    const normalized = normalizeError(error);
+    memStatusEl.textContent = `Flash read failed: ${normalized.message}`;
+  } finally {
+    transport.log = origLog;
+  }
+}
+
+function exportMemoryBin() {
+  if (!lastReadData) return;
+  const blob = new Blob([lastReadData.bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mem_0x${lastReadData.addr.toString(16)}_${lastReadData.bytes.length}B.bin`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// --- Backend / clock change ---
 async function onBackendChanged(event) {
   const name = event.target.value;
-  if (connected) {
-    await disconnectProbe();
-  }
+  if (connected) await disconnectProbe();
   backend = backendManager.setBackend(name);
   window.localStorage.setItem("backend-name", name);
   log(`Backend selected: ${name}`);
@@ -373,11 +600,10 @@ function onClockChanged() {
   const hz = parseInt(clockSelect.value, 10);
   backendManager.setSwdClockHz(hz);
   log(`SWD clock set to ${hz / 1000} kHz`);
-  if (connected) {
-    log("SWD clock change will take effect on next connect.");
-  }
+  if (connected) log("SWD clock change will take effect on next connect.");
 }
 
+// --- Event listeners ---
 btnConnect.addEventListener("click", connectProbe);
 btnDisconnect.addEventListener("click", disconnectProbe);
 btnProgram.addEventListener("click", runProgram);
@@ -386,25 +612,25 @@ btnReset.addEventListener("click", runReset);
 fileInput.addEventListener("change", onFirmwareSelected);
 btnFetchHex.addEventListener("click", onFetchHex);
 btnLoadBuiltin.addEventListener("click", onLoadBuiltin);
+btnClearHex.addEventListener("click", onClearHex);
 backendSelect.addEventListener("change", onBackendChanged);
 clockSelect.addEventListener("change", onClockChanged);
 chkConfirmProgram.addEventListener("change", updateOperationButtons);
 btnCheckProtection.addEventListener("click", runCheckProtection);
 btnRecover.addEventListener("click", runRecoverDevice);
+btnMemRead.addEventListener("click", runReadMemory);
+btnMemReadFlash.addEventListener("click", runReadAllFlash);
+btnMemExport.addEventListener("click", exportMemoryBin);
+
+document.getElementById("flash-mode-select").addEventListener("change", () => mergeAndUpdate());
+
 targetSelect.addEventListener("change", () => {
   const val = targetSelect.value;
   try {
     backend.setTargetOverride(val === "auto" ? null : val);
     log(`Target override: ${val === "auto" ? "auto-detect" : val}`);
-    if (imageContext) {
-      const activeTarget = backend.activeTarget;
-      const policy = validateAppRange(imageContext.map, imageContext.mode, activeTarget);
-      imageContext.policy = policy;
-      if (!policy.ok) {
-        for (const issue of policy.violations) log(`Policy violation: ${issue}`);
-      }
-      updateOperationButtons();
-    }
+    mergeAndUpdate();
+    refreshVisualizer();
   } catch (e) {
     log(`Target change failed: ${e.message}`);
   }
@@ -414,54 +640,38 @@ progressBus.subscribe((event) => {
   log(`[${event.type}] ${event.message}`);
 });
 
+// --- Console debug helpers ---
 window.diagRead = async (addr = 0x0) => {
   window._imageContext = imageContext;
   window._adi = backend.adi;
-  if (!connected) {
-    log("Not connected");
-    return;
-  }
+  if (!connected) { log("Not connected"); return; }
   try {
     const results = await backend.diagRawRead32(addr);
-    for (const [step, msg] of Object.entries(results)) {
-      log(`  ${step}: ${msg}`);
-    }
+    for (const [step, msg] of Object.entries(results)) log(`  ${step}: ${msg}`);
     return results;
-  } catch (e) {
-    log(`diagRead failed: ${e.message}`);
-  }
+  } catch (e) { log(`diagRead failed: ${e.message}`); }
 };
 
 window.readMem32 = async (addr) => {
-  if (!connected) {
-    log("Not connected");
-    return;
-  }
+  if (!connected) { log("Not connected"); return; }
   try {
     const val = await backend.adi.readMem32(addr);
     log(`readMem32(0x${addr.toString(16)}): 0x${val.toString(16)}`);
     return val;
-  } catch (e) {
-    log(`readMem32 failed: ${e.message}`);
-  }
+  } catch (e) { log(`readMem32 failed: ${e.message}`); }
 };
 
 window.readMemRange = async (startAddr, count) => {
-  if (!connected) {
-    log("Not connected");
-    return;
-  }
+  if (!connected) { log("Not connected"); return; }
   try {
     const results = [];
     for (let i = 0; i < count; i++) {
       const val = await backend.adi.readMem32(startAddr + i * 4);
       results.push(`0x${val.toString(16)}`);
     }
-    log(`readMemRange(0x${startAddr.toString(16)}, ${count}): ${results.join(', ')}`);
+    log(`readMemRange(0x${startAddr.toString(16)}, ${count}): ${results.join(", ")}`);
     return results;
-  } catch (e) {
-    log(`readMemRange failed: ${e.message}`);
-  }
+  } catch (e) { log(`readMemRange failed: ${e.message}`); }
 };
 
 window.rawTest = async () => {
@@ -479,59 +689,32 @@ window.rawTest = async () => {
 
   log("rawTest: reading erased page...");
   const e0 = await adi.readMem32(0x27000);
-  const e4 = await adi.readMem32(0x27004);
-  const e8 = await adi.readMem32(0x27008);
-  log(`  erased: 0x27000=0x${e0.toString(16)} 0x27004=0x${e4.toString(16)} 0x27008=0x${e8.toString(16)}`);
+  log(`  erased: 0x27000=0x${e0.toString(16)}`);
 
   log("rawTest: writing via writeMem32...");
   await adi.writeMem32(NVMC_CONFIG, 1); await waitRdy();
   await adi.writeMem32(0x27000, 0xDEADBEEF);
-  await adi.writeMem32(0x27004, 0xCAFEBABE);
-  await adi.writeMem32(0x27008, 0x12345678);
   await waitRdy();
   await adi.writeMem32(NVMC_CONFIG, 0); await waitRdy();
 
-  log("rawTest: reading back via readMem32...");
   const r0 = await adi.readMem32(0x27000);
-  const r4 = await adi.readMem32(0x27004);
-  const r8 = await adi.readMem32(0x27008);
-  log(`  readback: 0x27000=0x${r0.toString(16)} 0x27004=0x${r4.toString(16)} 0x27008=0x${r8.toString(16)}`);
-
-  log(`  match: w0=${r0 === 0xDEADBEEF} w1=${r4 === 0xCAFEBABE} w2=${r8 === 0x12345678}`);
-  return { erased: [e0, e4, e8], readback: [r0, r4, r8] };
+  log(`  readback: 0x27000=0x${r0.toString(16)}, match: ${r0 === 0xDEADBEEF}`);
+  return { erased: e0, readback: r0 };
 };
 
 window.blockReadTest = async () => {
   if (!connected) { log("Not connected"); return; }
   const adi = backend.adi;
-  const maxWords = adi.maxReadBlockWordCount;
-  log(`blockReadTest: maxReadBlockWordCount=${maxWords}`);
-
-  log("blockReadTest: reading 8 words via readMemBlockFast at 0x27000...");
-  const block = await adi.readMemBlockFast(0x27000, 8);
+  log(`blockReadTest: reading 8 words at 0x0...`);
+  const block = await adi.readMemBlockFast(0x0, 8);
   log(`  block: ${Array.from(block).map(v => "0x" + v.toString(16)).join(", ")}`);
-
-  log("blockReadTest: reading same 8 words via individual readMem32...");
-  const words = [];
-  for (let i = 0; i < 8; i++) {
-    words.push(await adi.readMem32(0x27000 + i * 4));
-  }
-  log(`  word:  ${words.map(v => "0x" + v.toString(16)).join(", ")}`);
-
-  const matches = Array.from(block).every((v, i) => v === words[i]);
-  log(`  match: ${matches}`);
-  if (!matches) {
-    for (let i = 0; i < 8; i++) {
-      if (block[i] !== words[i]) {
-        log(`  diff at word ${i}: block=0x${block[i].toString(16)} word=0x${words[i].toString(16)}`);
-      }
-    }
-  }
-  return { block: Array.from(block), word: words };
+  return Array.from(block);
 };
 
+// --- Init ---
 if (checkCompatibility()) {
   log(`Backend selected: ${selectedBackendName}`);
   updateOperationButtons();
+  refreshVisualizer();
   setStatus("Ready");
 }
