@@ -107,10 +107,10 @@ function renderFileList() {
   }
   const items = hexFiles.map((f) => {
     const segs = buildImageMap(f.parsed).segments.length;
-    return `<div class="file-item" style="display:flex;align-items:center;gap:0.5rem;margin:0.25rem 0;">
-      <span style="width:14px;height:14px;border-radius:3px;background:${f.color};flex-shrink:0;"></span>
-      <span style="flex:1;font-size:0.85rem;">${escHtml(f.name)} <small style="color:#6b7280;">(${f.parsed.byteCount}B, ${segs} seg)</small></span>
-      <button type="button" data-remove-id="${f.id}" style="padding:0.2rem 0.5rem;font-size:0.75rem;">✕</button>
+    return `<div class="file-item flex-center gap-sm my-1">
+      <span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${f.color};"></span>
+      <span class="flex-1 text-sm">${escHtml(f.name)} <small class="text-muted">(${f.parsed.byteCount}B, ${segs} seg)</small></span>
+      <button type="button" data-remove-id="${f.id}" class="text-xs px-1 py-1">✕</button>
     </div>`;
   }).join("");
   elements.fileListEl.innerHTML = items;

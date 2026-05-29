@@ -90,5 +90,5 @@ export function renderFlashVisualizer(container, {
     parts.push(`<text x="${x.toFixed(1)}" y="${BAR_H + 18}" font-size="9" text-anchor="${t.anchor}" fill="#374151">${t.label}</text>`);
   }
 
-  container.innerHTML = `<svg viewBox="0 0 ${W} ${SVG_H}" width="100%" height="${SVG_H}" style="display:block;overflow:visible">${parts.join("")}</svg>`;
+  container.innerHTML = `<svg viewBox="0 0 ${W} ${SVG_H}" width="100%" height="${SVG_H}" style="display:block" class="overflow-visible">${parts.join("")}</svg>`;
 }
