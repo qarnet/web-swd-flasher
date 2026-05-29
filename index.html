@@ -50,7 +50,7 @@
           <div class="progress-bar-fill" id="progress-fill"></div>
         </div>
         <p id="status" class="status">Idle</p>
-        <pre id="target-info" class="log"></pre>
+        <pre id="target-info" class="log" hidden></pre>
         <pre id="probe-caps" class="log" hidden></pre>
       </section>
 
@@ -92,7 +92,7 @@
           I reviewed target info and image map; allow flash operations.
         </label>
         <p id="image-summary" class="status">No image loaded</p>
-        <pre id="image-map" class="log" style="min-height:60px;font-size:0.8rem;"></pre>
+        <pre id="image-map" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <section class="panel">
@@ -105,7 +105,7 @@
           <button id="btn-core-regs" type="button" disabled>Read Registers</button>
         </div>
         <p id="debug-status" class="status"></p>
-        <pre id="debug-regs" class="log" style="min-height:40px;font-size:0.8rem;"></pre>
+        <pre id="debug-regs" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <section class="panel">
@@ -117,11 +117,13 @@
           <input id="mem-len-input" type="text" value="256" style="width:8rem;" />
           <button id="btn-mem-read" type="button" disabled>Read</button>
           <button id="btn-mem-read-flash" type="button" disabled>Read All Flash</button>
+        </div>
+        <div class="row" style="margin-top:0.5rem;">
           <button id="btn-mem-export" type="button" disabled>Export .bin</button>
           <button id="btn-mem-export-hex" type="button" disabled>Export .hex</button>
         </div>
         <p id="mem-status" class="status"></p>
-        <pre id="mem-dump" class="log" style="min-height:60px;font-size:0.75rem;overflow:auto;max-height:300px;"></pre>
+        <pre id="mem-dump" class="log" style="font-size:0.75rem;overflow:auto;max-height:300px;" hidden></pre>
       </section>
 
       <section class="panel" id="uicr-panel">
@@ -131,7 +133,7 @@
           <button id="btn-uicr-read" type="button" disabled>Read UICR</button>
         </div>
         <p id="uicr-status" class="status"></p>
-        <pre id="uicr-dump" class="log" style="min-height:60px;font-size:0.8rem;"></pre>
+        <pre id="uicr-dump" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <section class="panel">

@@ -178,6 +178,7 @@ function renderTargetInfo(probe, target) {
     lines.push(`FICR flash: ${target.ficr.flash}`);
   }
   targetInfoEl.textContent = lines.join("\n");
+  targetInfoEl.hidden = false;
 
   if (probe.capabilities !== undefined) {
     const caps = [];
@@ -266,8 +267,10 @@ function setConnected(isConnected) {
     recoveryStatusEl.textContent = "";
     debugStatusEl.textContent = "";
     debugRegsEl.textContent = "";
+    debugRegsEl.hidden = true;
     uicrStatusEl.textContent = "";
     uicrDumpEl.textContent = "";
+    uicrDumpEl.hidden = true;
     targetSelect.value = "auto";
     readRegions = [];
   }
@@ -312,6 +315,7 @@ function mergeAndUpdate() {
     imageContext = null;
     imageSummary.textContent = "No image loaded";
     imageMapEl.textContent = "";
+    imageMapEl.hidden = true;
     updateOperationButtons();
     refreshVisualizer();
     return;
@@ -327,6 +331,7 @@ function mergeAndUpdate() {
     imageSummary.textContent = `⚠ ${conflicts.length} address conflict(s) between loaded files.`;
     imageContext = null;
     imageMapEl.textContent = "";
+    imageMapEl.hidden = true;
     updateOperationButtons();
     refreshVisualizer();
     return;
@@ -335,6 +340,7 @@ function mergeAndUpdate() {
   if (!merged) {
     imageContext = null;
     imageSummary.textContent = "No data after merge";
+    imageMapEl.hidden = true;
     updateOperationButtons();
     refreshVisualizer();
     return;
@@ -344,6 +350,7 @@ function mergeAndUpdate() {
   const policy = validateAppRange(map, mode, activeTargetForValidation());
   imageContext = { parsed: merged, map, policy, mode };
   imageMapEl.textContent = formatImageMap(map);
+  imageMapEl.hidden = false;
 
   if (policy.ok) {
     const names = hexFiles.map((f) => f.name).join(", ");
@@ -459,6 +466,7 @@ async function disconnectProbe() {
   setConnected(false);
   setStatus("Disconnected");
   targetInfoEl.textContent = "";
+  targetInfoEl.hidden = true;
   refreshVisualizer();
 }
 
@@ -645,6 +653,7 @@ async function runReadMemory() {
     const bytes = new Uint8Array(words.buffer).slice(0, lenBytes);
     lastReadData = { addr, bytes };
     memDumpEl.textContent = formatHexDump(addr, bytes);
+    memDumpEl.hidden = false;
     memStatusEl.textContent = `Read ${bytes.length} bytes at 0x${addr.toString(16)}`;
     btnMemExport.disabled = false;
     btnMemExportHex.disabled = false;
@@ -689,6 +698,7 @@ async function runReadAllFlash() {
     const bytes = new Uint8Array(allWords.buffer);
     lastReadData = { addr: flashStart, bytes };
     memDumpEl.textContent = formatHexDump(flashStart, bytes.slice(0, 256)); // show first 256B in dump
+    memDumpEl.hidden = false;
     memStatusEl.textContent = `Read ${bytes.length} bytes of flash (showing first 256B, export for full)`;
     btnMemExport.disabled = false;
     btnMemExportHex.disabled = false;
@@ -983,6 +993,7 @@ async function runUicrRead() {
       lines.push(`${name.padEnd(14)}: 0x${val.toString(16).padStart(8, "0")} (${addr.toString(16).toUpperCase()})`);
     }
     uicrDumpEl.textContent = lines.join("\n");
+    uicrDumpEl.hidden = false;
     uicrStatusEl.textContent = "UICR read complete";
     log("UICR read complete");
   } catch (e) {
@@ -1033,6 +1044,7 @@ async function runCoreRegs() {
       `${name.padEnd(5)}: 0x${val.toString(16).padStart(8, "0")}`
     );
     debugRegsEl.textContent = lines.join("\n");
+    debugRegsEl.hidden = false;
     debugStatusEl.textContent = "Registers read";
   } catch (e) {
     debugStatusEl.textContent = `Register read failed: ${normalizeError(e).message}`;
