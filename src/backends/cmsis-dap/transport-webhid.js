@@ -56,8 +56,9 @@ export class CmsisDapWebHidTransport {
   async requestDevice() {
     const known = await navigator.hid.getDevices();
     this.debug("authorized-devices", known.map((d) => ({ vendorId: d.vendorId, productId: d.productId, productName: d.productName })));
-    const vids = CMSIS_DAP_HID_FILTERS.filter((f) => f.vendorId).map((f) => f.vendorId);
-    const cached = known.find((dev) => vids.includes(dev.vendorId));
+    const cached = known.find((dev) =>
+      CMSIS_DAP_HID_FILTERS.some((f) => f.vendorId !== undefined && dev.vendorId === f.vendorId && dev.productId === f.productId)
+    );
     if (cached) {
       this.device = cached;
       return this.device;

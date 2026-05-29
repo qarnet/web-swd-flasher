@@ -81,8 +81,9 @@ export class CmsisDapWebUsbTransport {
   async requestDevice() {
     const known = await navigator.usb.getDevices();
     this.debug("authorized-devices", known.map((d) => ({ vid: d.vendorId, pid: d.productId, name: d.productName })));
-    const vids = CMSIS_DAP_FILTERS.map((f) => f.vendorId);
-    const cached = known.find((dev) => vids.includes(dev.vendorId));
+    const cached = known.find((dev) =>
+      CMSIS_DAP_FILTERS.some((f) => dev.vendorId === f.vendorId && dev.productId === f.productId)
+    );
     if (cached) {
       this.device = cached;
       return this.device;
