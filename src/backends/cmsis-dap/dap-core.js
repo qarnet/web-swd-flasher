@@ -13,6 +13,12 @@ export class CmsisDapCore {
   async connect() {
     await this.transport.open();
     this.debug("connect-start");
+    // Ensure clean state: disconnect first, then connect
+    try {
+      await this.sendCommand(new Uint8Array([0x03]));
+    } catch {
+      /* ignore disconnect errors */
+    }
     const connect = await this.sendCommand(new Uint8Array([0x02, 0x01]));
     if (connect[1] === 0) {
       throw new Error("CMSIS-DAP connect returned no active port");
@@ -24,6 +30,8 @@ export class CmsisDapCore {
     await this.sendCommand(new Uint8Array([0x04, 0x02, 0x50, 0x00, 0x00]));
     await this.sendCommand(new Uint8Array([0x13, 0x00]));
     await this.swjSwitchToSwd();
+    // Extra line reset after switch to ensure target is in a known state
+    await this.lineReset();
     const dpidr = await this.readDp(0x00);
     this.debug("dpidr-read", { dpidr: `0x${dpidr.toString(16)}` });
     await this.writeDp(0x00, 0x1e);
@@ -151,8 +159,21 @@ export class CmsisDapCore {
     }
 
     if (ack !== 0x01) {
+      const ackNames = {
+        0x00: "OK",
+        0x01: "OK",
+        0x02: "WAIT",
+        0x04: "FAULT",
+        0x07: "NO_ACK"
+      };
+      const ackName = ackNames[ack] ?? `UNKNOWN(${ack})`;
+      const hints = {
+        0x07: " — no target detected. Check that a target is connected and powered.",
+        0x04: " — debug fault. Try power-cycling the target or use recovery.",
+        0x02: " — target busy. Retry may help."
+      };
       throw new Error(
-        `CMSIS-DAP transfer failed with ACK=${ack} port=${port} register=0x${register.toString(16)} read=${read}`
+        `CMSIS-DAP transfer failed: ${ackName} port=${port} register=0x${register.toString(16)} read=${read}${hints[ack] ?? ""}`
       );
     }
 

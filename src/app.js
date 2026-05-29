@@ -1,1236 +1,303 @@
 import { BackendManager } from "./core/backend-manager.js";
-import { normalizeError } from "./core/errors.js";
 import { ProgressBus } from "./core/progress.js";
-import { parseIntelHexFileText } from "./hex/intel-hex-parser.js";
-import { buildImageMap, formatImageMap } from "./hex/image-map.js";
-import { FILE_COLORS, mergeHexFiles } from "./hex/multi-hex-merger.js";
-import { validateAppRange } from "./nrf/nrf52-memory-map.js";
-import { formatFicrInfo } from "./nrf/nrf52-ficr.js";
 import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
-import { RttClient } from "./rtt/rtt-client.js";
+import { buildImageMap } from "./hex/image-map.js";
 
-// --- DOM refs ---
-const compatBanner = document.getElementById("compat-banner");
-const compatMsg = document.getElementById("compat-msg");
-const btnConnect = document.getElementById("btn-connect");
-const btnDisconnect = document.getElementById("btn-disconnect");
-const btnProgram = document.getElementById("btn-program");
-const btnVerify = document.getElementById("btn-verify");
-const btnReset = document.getElementById("btn-reset");
-const backendSelect = document.getElementById("backend-select");
-const chkConfirmProgram = document.getElementById("chk-confirm-program");
-const statusEl = document.getElementById("status");
-const logEl = document.getElementById("log");
-const targetInfoEl = document.getElementById("target-info");
-const fileInput = document.getElementById("file-input");
-const imageSummary = document.getElementById("image-summary");
-const imageMapEl = document.getElementById("image-map");
-const btnFetchHex = document.getElementById("btn-fetch-hex");
-const btnLoadBuiltin = document.getElementById("btn-load-builtin");
-const builtinSelect = document.getElementById("builtin-select");
-const btnClearHex = document.getElementById("btn-clear-hex");
-const clockSelect = document.getElementById("clock-select");
-const probeCapsEl = document.getElementById("probe-caps");
-const btnCheckProtection = document.getElementById("btn-check-protection");
-const btnRecover = document.getElementById("btn-recover");
-const recoveryStatusEl = document.getElementById("recovery-status");
-const targetSelect = document.getElementById("target-select");
-const fileListEl = document.getElementById("file-list");
-const flashVisualizerEl = document.getElementById("flash-visualizer");
-const btnRttSearch = document.getElementById("btn-rtt-search");
-const btnRttStart = document.getElementById("btn-rtt-start");
-const btnRttStop = document.getElementById("btn-rtt-stop");
-const btnRttClear = document.getElementById("btn-rtt-clear");
-const rttStatusEl = document.getElementById("rtt-status");
-const rttLogEl = document.getElementById("rtt-log");
-const rttTxInput = document.getElementById("rtt-tx-input");
-const btnRttSend = document.getElementById("btn-rtt-send");
-const rttRamStartInput = document.getElementById("rtt-ram-start");
-const rttRamSizeInput = document.getElementById("rtt-ram-size");
-const rttIntervalInput = document.getElementById("rtt-interval");
-const statusLed = document.getElementById("status-led");
-const topbarTarget = document.getElementById("topbar-target");
-const btnTheme = document.getElementById("btn-theme");
-const progressBar = document.getElementById("progress-bar");
-const progressFill = document.getElementById("progress-fill");
+// UI Modules
+import * as logger from "./ui/logger.js";
+import * as settings from "./ui/settings.js";
+import * as connection from "./ui/connection.js";
+import * as hexManager from "./ui/hex-manager.js";
+import * as flashOps from "./ui/flash-ops.js";
+import * as recovery from "./ui/recovery.js";
+import * as memory from "./ui/memory.js";
+import * as uicr from "./ui/uicr.js";
+import * as debug from "./ui/debug.js";
+import * as rtt from "./ui/rtt-panel.js";
+import * as uart from "./ui/uart-panel.js";
+import * as swo from "./ui/swo-panel.js";
 
-const memAddrInput = document.getElementById("mem-addr-input");
-const memLenInput = document.getElementById("mem-len-input");
-const btnUicrRead = document.getElementById("btn-uicr-read");
-const uicrStatusEl = document.getElementById("uicr-status");
-const uicrDumpEl = document.getElementById("uicr-dump");
+// Global state
+let progressBus, backendManager;
+window.readRegions = [];
 
-const btnCoreHalt = document.getElementById("btn-core-halt");
-const btnCoreResume = document.getElementById("btn-core-resume");
-const btnCoreStep = document.getElementById("btn-core-step");
-const btnCoreRegs = document.getElementById("btn-core-regs");
-const debugStatusEl = document.getElementById("debug-status");
-const debugRegsEl = document.getElementById("debug-regs");
+// Gather all DOM elements
+function gatherElements() {
+  return {
+    // Topbar
+    statusEl: document.getElementById("status"),
+    statusLed: document.getElementById("status-led"),
+    topbarTarget: document.getElementById("topbar-target"),
+    btnTheme: document.getElementById("btn-theme"),
 
-const btnMemRead = document.getElementById("btn-mem-read");
-const btnMemReadFlash = document.getElementById("btn-mem-read-flash");
-const btnMemExport = document.getElementById("btn-mem-export");
-const btnMemExportHex = document.getElementById("btn-mem-export-hex");
-const memStatusEl = document.getElementById("mem-status");
-const memDumpEl = document.getElementById("mem-dump");
-const btnProgramVerifyReset = document.getElementById("btn-program-verify-reset");
+    // Compat banner
+    compatBanner: document.getElementById("compat-banner"),
+    compatMsg: document.getElementById("compat-msg"),
 
-const swoBaudInput = document.getElementById("swo-baud-input");
-const btnSwoOpen = document.getElementById("btn-swo-open");
-const btnSwoClose = document.getElementById("btn-swo-close");
-const btnSwoClear = document.getElementById("btn-swo-clear");
-const swoStatusEl = document.getElementById("swo-status");
-const swoLogEl = document.getElementById("swo-log");
-const swoPanelEl = document.getElementById("swo-panel");
-let swoOpen = false;
+    // Connection
+    backendSelect: document.getElementById("backend-select"),
+    clockSelect: document.getElementById("clock-select"),
+    btnConnect: document.getElementById("btn-connect"),
+    btnDisconnect: document.getElementById("btn-disconnect"),
+    targetSelect: document.getElementById("target-select"),
+    targetInfoEl: document.getElementById("target-info"),
+    probeCapsEl: document.getElementById("probe-caps"),
+    progressBar: document.getElementById("progress-bar"),
+    progressFill: document.getElementById("progress-fill"),
 
-const uartBaudSelect = document.getElementById("uart-baud-select");
-const btnUartOpen = document.getElementById("btn-uart-open");
-const btnUartClose = document.getElementById("btn-uart-close");
-const btnUartClear = document.getElementById("btn-uart-clear");
-const uartStatusEl = document.getElementById("uart-status");
-const uartLogEl = document.getElementById("uart-log");
-const uartTxInput = document.getElementById("uart-tx-input");
-const btnUartSend = document.getElementById("btn-uart-send");
+    // Hex management
+    fileInput: document.getElementById("file-input"),
+    urlInput: document.getElementById("url-input"),
+    builtinSelect: document.getElementById("builtin-select"),
+    btnFetchHex: document.getElementById("btn-fetch-hex"),
+    btnLoadBuiltin: document.getElementById("btn-load-builtin"),
+    btnClearHex: document.getElementById("btn-clear-hex"),
+    fileListEl: document.getElementById("file-list"),
+    imageSummary: document.getElementById("image-summary"),
+    imageMapEl: document.getElementById("image-map"),
+    flashModeSelect: document.getElementById("flash-mode-select"),
+    flashVisualizerEl: document.getElementById("flash-visualizer"),
 
-// --- Theme ---
-(function initTheme() {
-  const saved = localStorage.getItem("theme") || "light";
-  if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
-  btnTheme?.addEventListener("click", () => {
-    const current = document.documentElement.getAttribute("data-theme");
-    const next = current === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
-  });
-})();
+    // Flash operations
+    btnProgram: document.getElementById("btn-program"),
+    btnVerify: document.getElementById("btn-verify"),
+    btnReset: document.getElementById("btn-reset"),
+    btnProgramVerifyReset: document.getElementById("btn-program-verify-reset"),
+    chkConfirmProgram: document.getElementById("chk-confirm-program"),
 
-// --- Settings persistence ---
-const PERSIST = [
-  { el: clockSelect,       key: "swd-clock-hz",  event: "change" },
-  { el: uartBaudSelect,    key: "uart-baud",      event: "change" },
-  { el: rttRamStartInput,  key: "rtt-ram-start",  event: "change" },
-  { el: rttRamSizeInput,   key: "rtt-ram-size",   event: "change" },
-  { el: rttIntervalInput,  key: "rtt-interval",   event: "change" },
-  { el: memAddrInput,      key: "mem-addr",       event: "change" },
-  { el: memLenInput,       key: "mem-len",        event: "change" },
-];
-(function initSettings() {
-  for (const { el, key, event } of PERSIST) {
-    const saved = localStorage.getItem(key);
-    if (saved !== null) el.value = saved;
-    el.addEventListener(event, () => localStorage.setItem(key, el.value));
-  }
-})();
+    // Recovery
+    btnCheckProtection: document.getElementById("btn-check-protection"),
+    btnRecover: document.getElementById("btn-recover"),
+    recoveryStatusEl: document.getElementById("recovery-status"),
 
-// --- App state ---
-const progressBus = new ProgressBus();
-const backendManager = new BackendManager(progressBus, (message) => log(message));
-const backendParam = new URLSearchParams(window.location.search).get("backend");
-const storedBackendName = window.localStorage.getItem("backend-name");
-const selectedBackendName = backendParam || storedBackendName || "cmsis-dap";
-backendSelect.value = selectedBackendName;
-let backend = backendManager.getBackend(selectedBackendName);
-let hexFiles = [];  // [{id, name, parsed, color}]
-let nextFileId = 0;
-let imageContext = null;
-let connected = false;
-let lastReadData = null;  // {addr, bytes: Uint8Array} — for export
-let rttClient = null;
-let uartOpen = false;
-let readRegions = [];     // [{start, size, ok}] — for visualizer overlay
+    // Memory
+    memAddrInput: document.getElementById("mem-addr-input"),
+    memLenInput: document.getElementById("mem-len-input"),
+    btnMemRead: document.getElementById("btn-mem-read"),
+    btnMemReadFlash: document.getElementById("btn-mem-read-flash"),
+    btnMemExport: document.getElementById("btn-mem-export"),
+    btnMemExportHex: document.getElementById("btn-mem-export-hex"),
+    memStatusEl: document.getElementById("mem-status"),
+    memDumpEl: document.getElementById("mem-dump"),
 
-// --- Logging ---
-function log(message) {
-  const line = `[${new Date().toISOString()}] ${message}`;
-  logEl.textContent += `${line}\n`;
-  logEl.scrollTop = logEl.scrollHeight;
+    // UICR
+    btnUicrRead: document.getElementById("btn-uicr-read"),
+    uicrStatusEl: document.getElementById("uicr-status"),
+    uicrDumpEl: document.getElementById("uicr-dump"),
+
+    // Debug
+    btnCoreHalt: document.getElementById("btn-core-halt"),
+    btnCoreResume: document.getElementById("btn-core-resume"),
+    btnCoreStep: document.getElementById("btn-core-step"),
+    btnCoreRegs: document.getElementById("btn-core-regs"),
+    debugStatusEl: document.getElementById("debug-status"),
+    debugRegsEl: document.getElementById("debug-regs"),
+
+    // RTT
+    rttRamStartInput: document.getElementById("rtt-ram-start"),
+    rttRamSizeInput: document.getElementById("rtt-ram-size"),
+    rttIntervalInput: document.getElementById("rtt-interval"),
+    btnRttSearch: document.getElementById("btn-rtt-search"),
+    btnRttStart: document.getElementById("btn-rtt-start"),
+    btnRttStop: document.getElementById("btn-rtt-stop"),
+    btnRttClear: document.getElementById("btn-rtt-clear"),
+    rttStatusEl: document.getElementById("rtt-status"),
+    rttLogEl: document.getElementById("rtt-log"),
+    rttTxInput: document.getElementById("rtt-tx-input"),
+    btnRttSend: document.getElementById("btn-rtt-send"),
+
+    // UART
+    uartBaudSelect: document.getElementById("uart-baud-select"),
+    btnUartOpen: document.getElementById("btn-uart-open"),
+    btnUartClose: document.getElementById("btn-uart-close"),
+    btnUartClear: document.getElementById("btn-uart-clear"),
+    uartStatusEl: document.getElementById("uart-status"),
+    uartLogEl: document.getElementById("uart-log"),
+    uartTxInput: document.getElementById("uart-tx-input"),
+    btnUartSend: document.getElementById("btn-uart-send"),
+
+    // SWO
+    swoBaudInput: document.getElementById("swo-baud-input"),
+    btnSwoOpen: document.getElementById("btn-swo-open"),
+    btnSwoClose: document.getElementById("btn-swo-close"),
+    btnSwoClear: document.getElementById("btn-swo-clear"),
+    swoStatusEl: document.getElementById("swo-status"),
+    swoLogEl: document.getElementById("swo-log"),
+    swoPanelEl: document.getElementById("swo-panel"),
+
+    // Event log
+    logEl: document.getElementById("log"),
+  };
 }
 
-function setStatus(message) {
-  statusEl.textContent = message;
-  log(message);
-}
-
-// --- Target info rendering ---
-function renderTargetInfo(probe, target) {
-  const lines = [];
-  lines.push(`Backend: ${probe.backend}`);
-  lines.push(`Probe: ${probe.name || "unknown"}`);
-  if (probe.manufacturer) lines.push(`Manufacturer: ${probe.manufacturer}`);
-  if (probe.transport) lines.push(`Transport: ${probe.transport}`);
-  if (probe.packetSize) lines.push(`Packet size: ${probe.packetSize}`);
-  lines.push(`Target family: ${target.family || "unknown"}`);
-  lines.push(`Target part: ${target.part || "unknown"}`);
-  if (target.dpidr) lines.push(`DPIDR: ${target.dpidr}`);
-  if (target.flash) {
-    const mb = (target.flash.size / 1024 / 1024).toFixed(3);
-    lines.push(`Flash: 0x${target.flash.start.toString(16)} + ${mb} MB (page ${target.flash.pageSize / 1024} KB)`);
-  }
-  if (target.ram) {
-    const kb = target.ram.size / 1024;
-    lines.push(`RAM: 0x${target.ram.start.toString(16)} + ${kb} KB`);
-  }
-  if (target.ficr) {
-    lines.push(`FICR part: 0x${target.ficr.part.toString(16)}`);
-    lines.push(`FICR variant: 0x${target.ficr.variant.toString(16)}`);
-    lines.push(`FICR package: 0x${target.ficr.package.toString(16)}`);
-    lines.push(`FICR ram: ${target.ficr.ram}`);
-    lines.push(`FICR flash: ${target.ficr.flash}`);
-  }
-  targetInfoEl.textContent = lines.join("\n");
-  targetInfoEl.hidden = false;
-
-  if (probe.capabilities !== undefined) {
-    const caps = [];
-    caps.push(`Capabilities: 0x${probe.capabilities.toString(16).padStart(2, "0")}`);
-    caps.push(`  SWD: ${probe.hasSWD ? "yes" : "no"}`);
-    caps.push(`  JTAG: ${probe.hasJTAG ? "yes" : "no"}`);
-    caps.push(`  SWO UART: ${probe.hasSWO_UART ? "yes" : "no"}`);
-    caps.push(`  SWO Manchester: ${probe.hasSWO_Manchester ? "yes" : "no"}`);
-    caps.push(`  Atomic Commands: ${probe.hasAtomicCommands ? "yes" : "no"}`);
-    caps.push(`  Test Domain Timer: ${probe.hasTestDomainTimer ? "yes" : "no"}`);
-    caps.push(`  SWO Streaming: ${probe.hasSWO_Streaming ? "yes" : "no"}`);
-    caps.push(`  UART Port: ${probe.hasUART ? "yes" : "no"}`);
-    caps.push(`Max packet count: ${probe.maxPacketCount}`);
-    caps.push(`Max packet size: ${probe.maxPacketSize}`);
-    probeCapsEl.textContent = caps.join("\n");
-    probeCapsEl.hidden = false;
-  }
-}
-
-// --- Target selector ---
-function populateTargetSelector() {
-  const targets = backend.availableTargets ?? [];
-  while (targetSelect.options.length > 1) targetSelect.remove(1);
-  for (const t of targets) {
-    if (t.id === "generic") continue;
-    const opt = document.createElement("option");
-    opt.value = t.id;
-    opt.textContent = t.label;
-    targetSelect.appendChild(opt);
-  }
-}
-
-// --- Connection state ---
-function setProgress(percent) {
-  if (percent === null) {
-    progressBar.hidden = true;
-    progressFill.style.width = "0%";
-  } else {
-    progressBar.hidden = false;
-    progressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-  }
-}
-
-function setConnected(isConnected) {
-  window.connectedState = isConnected;
-  statusLed.classList.toggle("on", isConnected);
-  topbarTarget.textContent = isConnected ? (backend.activeTarget?.label ?? "Connected") : "Not connected";
-  btnConnect.disabled = isConnected;
-  btnDisconnect.disabled = !isConnected;
-  btnCheckProtection.disabled = !isConnected;
-  btnRecover.disabled = !isConnected;
-  btnUicrRead.disabled = !isConnected;
-  targetSelect.disabled = !isConnected;
-  btnCoreHalt.disabled = !isConnected;
-  btnCoreResume.disabled = !isConnected;
-  btnCoreStep.disabled = !isConnected;
-  btnCoreRegs.disabled = !isConnected;
-  btnMemRead.disabled = !isConnected;
-  btnMemReadFlash.disabled = !isConnected;
-  btnRttSearch.disabled = !isConnected;
-  if (isConnected) {
-    btnUartOpen.disabled = !backend.hasUART;
-    const hasSWO = backend.hasSWO;
-    swoPanelEl.hidden = !hasSWO;
-    btnSwoOpen.disabled = !hasSWO;
-  } else {
-    swoPanelEl.hidden = true;
-    if (swoOpen) { backend.closeSwo().catch(() => {}); swoOpen = false; }
-    btnSwoOpen.disabled = true;
-    btnSwoClose.disabled = true;
-    swoStatusEl.textContent = "";
-    if (rttClient) { rttClient.stop(); rttClient = null; }
-    btnRttStart.disabled = true;
-    btnRttStop.disabled = true;
-    rttTxInput.disabled = true;
-    btnRttSend.disabled = true;
-    rttStatusEl.textContent = "";
-    if (uartOpen) { backend.closeUart().catch(() => {}); uartOpen = false; }
-    btnUartOpen.disabled = true;
-    btnUartClose.disabled = true;
-    uartTxInput.disabled = true;
-    btnUartSend.disabled = true;
-    uartStatusEl.textContent = "";
-    probeCapsEl.hidden = true;
-    probeCapsEl.textContent = "";
-    recoveryStatusEl.textContent = "";
-    debugStatusEl.textContent = "";
-    debugRegsEl.textContent = "";
-    debugRegsEl.hidden = true;
-    uicrStatusEl.textContent = "";
-    uicrDumpEl.textContent = "";
-    uicrDumpEl.hidden = true;
-    targetSelect.value = "auto";
-    readRegions = [];
-  }
-  updateOperationButtons();
-}
-
-function updateOperationButtons() {
-  const imageReady = imageContext?.policy?.ok === true;
-  const confirmed = chkConfirmProgram.checked;
-  const caps = backend.capabilities();
-  btnProgram.disabled = !(connected && imageReady && confirmed && caps.supportsFlash);
-  btnVerify.disabled = !(connected && imageReady && confirmed && caps.supportsVerify);
-  btnReset.disabled = !(connected && caps.supportsReset);
-  btnProgramVerifyReset.disabled = !(connected && imageReady && confirmed && caps.supportsFlash && caps.supportsVerify && caps.supportsReset);
-}
-
-// --- Compatibility check ---
-function checkCompatibility() {
-  if (!window.isSecureContext) {
-    compatMsg.textContent = "Secure context required (use localhost).";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
-  if (!navigator.usb) {
-    compatMsg.textContent = "navigator.usb unavailable in this browser profile.";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
-  compatBanner.hidden = true;
-  return true;
-}
-
-// --- Multi-hex file management ---
-function activeTargetForValidation() {
-  return connected ? backend.activeTarget : null;
-}
-
-function mergeAndUpdate() {
-  if (hexFiles.length === 0) {
-    imageContext = null;
-    imageSummary.textContent = "No image loaded";
-    imageMapEl.textContent = "";
-    imageMapEl.hidden = true;
-    updateOperationButtons();
-    refreshVisualizer();
-    return;
-  }
-
-  const mode = document.getElementById("flash-mode-select").value;
-  const { conflicts, merged } = mergeHexFiles(hexFiles);
-
-  if (conflicts.length > 0) {
-    for (const c of conflicts) {
-      log(`Conflict at 0x${c.addr.toString(16)}: ${c.fileA}=0x${c.valueA.toString(16)} vs ${c.fileB}=0x${c.valueB.toString(16)}`);
-    }
-    imageSummary.textContent = `⚠ ${conflicts.length} address conflict(s) between loaded files.`;
-    imageContext = null;
-    imageMapEl.textContent = "";
-    imageMapEl.hidden = true;
-    updateOperationButtons();
-    refreshVisualizer();
-    return;
-  }
-
-  if (!merged) {
-    imageContext = null;
-    imageSummary.textContent = "No data after merge";
-    imageMapEl.hidden = true;
-    updateOperationButtons();
-    refreshVisualizer();
-    return;
-  }
-
-  const map = buildImageMap(merged);
-  const policy = validateAppRange(map, mode, activeTargetForValidation());
-  imageContext = { parsed: merged, map, policy, mode };
-  imageMapEl.textContent = formatImageMap(map);
-  imageMapEl.hidden = false;
-
-  if (policy.ok) {
-    const names = hexFiles.map((f) => f.name).join(", ");
-    imageSummary.textContent = `${merged.byteCount} bytes from ${hexFiles.length} file(s) — OK (mode: ${mode})`;
-    log(`Image accepted: ${names} (mode: ${mode})`);
-  } else {
-    imageSummary.textContent = "Image rejected by range policy.";
-    for (const issue of policy.violations) {
-      log(`Policy violation: ${issue}`);
-    }
-  }
-  updateOperationButtons();
-  refreshVisualizer();
-}
-
-function addHexFromText(name, text) {
-  try {
-    const parsed = parseIntelHexFileText(text);
-    const color = FILE_COLORS[nextFileId % FILE_COLORS.length];
-    hexFiles.push({ id: nextFileId++, name, parsed, color });
-    renderFileList();
-    mergeAndUpdate();
-  } catch (error) {
-    log(`Parse failed (${name}): ${error.message}`);
-  }
-}
-
-function renderFileList() {
-  if (hexFiles.length === 0) {
-    fileListEl.innerHTML = "";
-    return;
-  }
-  const items = hexFiles.map((f) => {
-    const segs = buildImageMap(f.parsed).segments.length;
-    return `<div class="file-item" style="display:flex;align-items:center;gap:0.5rem;margin:0.25rem 0;">
-      <span style="width:14px;height:14px;border-radius:3px;background:${f.color};flex-shrink:0;"></span>
-      <span style="flex:1;font-size:0.85rem;">${escHtml(f.name)} <small style="color:#6b7280;">(${f.parsed.byteCount}B, ${segs} seg)</small></span>
-      <button type="button" data-remove-id="${f.id}" style="padding:0.2rem 0.5rem;font-size:0.75rem;">✕</button>
-    </div>`;
-  }).join("");
-  fileListEl.innerHTML = items;
-  fileListEl.querySelectorAll("[data-remove-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = parseInt(btn.dataset.removeId, 10);
-      hexFiles = hexFiles.filter((f) => f.id !== id);
-      renderFileList();
-      mergeAndUpdate();
-    });
-  });
-}
-
-function escHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// --- Flash visualizer ---
 function refreshVisualizer() {
-  const tgt = connected ? backend.activeTarget : null;
-  const files = hexFiles.map((f) => ({
-    name: f.name,
-    color: f.color,
-    segments: buildImageMap(f.parsed).segments
-  }));
-  renderFlashVisualizer(flashVisualizerEl, {
-    flashStart: tgt?.flash?.start ?? 0,
-    flashSize: tgt?.flash?.size ?? 1024 * 1024,
-    targetId: tgt?.id ?? null,
+  const els = gatherElements();
+  const backend = connection.getBackend();
+  if (!backend || !els.flashVisualizerEl) return;
+
+  const imageContext = hexManager.getImageContext();
+  const hexFiles = hexManager.getHexFiles();
+  const files = imageContext
+    ? [
+        {
+          name: "merged",
+          color: "#2c6e49",
+          segments: imageContext.map.segments,
+        },
+      ]
+    : hexFiles.map((f) => ({
+        name: f.name,
+        color: f.color,
+        segments: buildImageMap(f.parsed).segments,
+      }));
+
+  const target = backend.activeTarget;
+  const props = {
+    flashStart: target?.flash?.start ?? 0,
+    flashSize: target?.flash?.size ?? 0x100000,
+    targetId: target?.id ?? "unknown",
     files,
-    readRegions
-  });
-}
-
-// --- Connect / disconnect ---
-async function connectProbe() {
-  const name = backendSelect.value;
-  backend = backendManager.setBackend(name);
-  try {
-    const known = await backend.getAuthorizedDevices();
-    if (known.length > 0) {
-      log(`Found ${known.length} previously authorized USB device(s).`);
-    }
-    setStatus("Selecting probe...");
-    await backend.requestDevice();
-    await backend.connect();
-    const probe = await backend.getProbeInfo();
-    const target = await backend.getTargetInfo();
-    connected = true;
-    populateTargetSelector();
-    if (target.id && target.id !== "generic") {
-      targetSelect.value = target.id;
-    }
-    setConnected(true);
-    const detectNote = target.autoDetected ? "(auto-detected)" : "(manual)";
-    setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part} ${detectNote}`);
-    renderTargetInfo(probe, target);
-    if (target.ficr) {
-      log(`FICR: ${formatFicrInfo(target.ficr)}`);
-    }
-    refreshVisualizer();
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Connect failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function disconnectProbe() {
-  try {
-    await backend.disconnect();
-  } catch (error) {
-    log(`Close warning: ${error.message}`);
-  }
-  connected = false;
-  setConnected(false);
-  setStatus("Disconnected");
-  targetInfoEl.textContent = "";
-  targetInfoEl.hidden = true;
-  refreshVisualizer();
-}
-
-// --- Hex loading ---
-async function onFetchHex() {
-  const url = document.getElementById("url-input").value.trim();
-  if (!url) return;
-  setStatus("Fetching hex…");
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    const name = url.split("/").pop() || url;
-    addHexFromText(name, text);
-    setStatus("Ready");
-  } catch (error) {
-    log(`Fetch failed: ${error.message}`);
-    setStatus("Ready");
-  }
-}
-
-async function onLoadBuiltin() {
-  const url = builtinSelect.value;
-  if (!url) {
-    setStatus("Select a firmware variant first");
-    return;
-  }
-  const name = builtinSelect.options[builtinSelect.selectedIndex].textContent;
-  setStatus(`Loading ${name}…`);
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const text = await response.text();
-    addHexFromText(`${name}.hex`, text);
-    setStatus("Ready");
-  } catch (error) {
-    log(`Built-in load failed: ${error.message}`);
-    setStatus("Ready");
-  }
-}
-
-async function onFirmwareSelected(event) {
-  const files = event.target.files;
-  if (!files || files.length === 0) return;
-  for (const file of files) {
-    try {
-      const text = await file.text();
-      addHexFromText(file.name, text);
-    } catch (error) {
-      log(`File read failed (${file.name}): ${error.message}`);
-    }
-  }
-  event.target.value = "";
-}
-
-function onClearHex() {
-  hexFiles = [];
-  renderFileList();
-  mergeAndUpdate();
-}
-
-// --- Flash operations ---
-async function runProgram() {
-  if (!imageContext?.policy?.ok) {
-    setStatus("Program blocked: image is missing or failed policy checks");
-    return;
-  }
-  try {
-    setStatus("Programming image...");
-    await backend.programImage(imageContext.parsed, { mode: imageContext.mode });
-    setStatus("Program complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Program failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function runVerify() {
-  if (!imageContext?.policy?.ok) {
-    setStatus("Verify blocked: image is missing or failed policy checks");
-    return;
-  }
-  try {
-    setStatus("Verifying image...");
-    await backend.verifyImage(imageContext.parsed, { mode: imageContext.mode });
-    setStatus("Verify complete");
-    // Mark verified regions on the visualizer
-    if (imageContext.map) {
-      readRegions = imageContext.map.segments.map((s) => ({ start: s.start, size: s.length, ok: true }));
-      refreshVisualizer();
-    }
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Verify failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function runReset() {
-  try {
-    setStatus("Resetting target...");
-    await backend.reset("run");
-    setStatus("Reset complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Reset failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-// --- Recovery ---
-async function runCheckProtection() {
-  try {
-    recoveryStatusEl.textContent = "Checking...";
-    const result = await backend.checkProtection();
-    const msg = result.locked
-      ? `LOCKED (APPROTECTSTATUS=0x${result.apProtectStatus.toString(16)})`
-      : `Unlocked (APPROTECTSTATUS=0x${result.apProtectStatus.toString(16)})`;
-    recoveryStatusEl.textContent = msg;
-    log(`Protection check: ${msg}`);
-  } catch (error) {
-    const normalized = normalizeError(error);
-    recoveryStatusEl.textContent = `Check failed: ${normalized.message}`;
-    log(`Protection check failed: ${normalized.message}`);
-  }
-}
-
-async function runRecoverDevice() {
-  const confirmed = window.confirm(
-    "WARNING: This will erase ALL flash and UICR on the target.\n\nThis cannot be undone. Continue?"
-  );
-  if (!confirmed) return;
-  try {
-    recoveryStatusEl.textContent = "Erasing...";
-    log("Recovery: starting CTRL-AP mass erase");
-    const result = await backend.recoverDevice((prog) => {
-      recoveryStatusEl.textContent = prog.busy ? "Erase in progress..." : "Erase done, verifying...";
-    });
-    const msg = result.unlocked ? "Recovery complete — device unlocked" : "Erase done but device still reports locked";
-    recoveryStatusEl.textContent = msg;
-    log(`Recovery: ${msg}`);
-  } catch (error) {
-    const normalized = normalizeError(error);
-    recoveryStatusEl.textContent = `Recovery failed: ${normalized.message}`;
-    log(`Recovery failed: ${normalized.message}`);
-  }
-}
-
-// --- Memory read ---
-function parseHexInput(s) {
-  const t = s.trim();
-  if (t.startsWith("0x") || t.startsWith("0X")) return parseInt(t, 16);
-  return parseInt(t, 10);
-}
-
-function formatHexDump(startAddr, bytes) {
-  const lines = [];
-  for (let i = 0; i < bytes.length; i += 16) {
-    const chunk = bytes.slice(i, i + 16);
-    const addrStr = (startAddr + i).toString(16).padStart(8, "0");
-    const hexParts = [];
-    const asciiParts = [];
-    for (let j = 0; j < 16; j++) {
-      if (j < chunk.length) {
-        hexParts.push(chunk[j].toString(16).padStart(2, "0"));
-        const c = chunk[j];
-        asciiParts.push(c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : ".");
-      } else {
-        hexParts.push("  ");
-        asciiParts.push(" ");
-      }
-    }
-    lines.push(`${addrStr}: ${hexParts.slice(0, 8).join(" ")}  ${hexParts.slice(8).join(" ")}  ${asciiParts.join("")}`);
-  }
-  return lines.join("\n");
-}
-
-async function runReadMemory() {
-  const addr = parseHexInput(memAddrInput.value);
-  const lenBytes = parseHexInput(memLenInput.value);
-  if (isNaN(addr) || isNaN(lenBytes) || lenBytes <= 0) {
-    memStatusEl.textContent = "Invalid address or length";
-    return;
-  }
-  const wordCount = Math.ceil(lenBytes / 4);
-  memStatusEl.textContent = "Reading...";
-  memDumpEl.textContent = "";
-  btnMemExport.disabled = true;
-  btnMemExportHex.disabled = true;
-  try {
-    const words = await backend.adi.readMemBlockFast(addr, wordCount);
-    const bytes = new Uint8Array(words.buffer).slice(0, lenBytes);
-    lastReadData = { addr, bytes };
-    memDumpEl.textContent = formatHexDump(addr, bytes);
-    memDumpEl.hidden = false;
-    memStatusEl.textContent = `Read ${bytes.length} bytes at 0x${addr.toString(16)}`;
-    btnMemExport.disabled = false;
-    btnMemExportHex.disabled = false;
-    // Show region on visualizer
-    readRegions = [{ start: addr, size: bytes.length, ok: true }];
-    refreshVisualizer();
-  } catch (error) {
-    const normalized = normalizeError(error);
-    memStatusEl.textContent = `Read failed: ${normalized.message}`;
-    readRegions = [{ start: addr, size: lenBytes, ok: false }];
-    refreshVisualizer();
-  }
-}
-
-async function runReadAllFlash() {
-  if (!connected) return;
-  const tgt = backend.activeTarget;
-  const flashStart = tgt?.flash?.start ?? 0;
-  const flashSize = tgt?.flash?.size ?? 1024 * 1024;
-  const wordCount = flashSize / 4;
-  const chunkWords = backend.adi.maxReadBlockWordCount * 16; // batch multiple blocks
-
-  memStatusEl.textContent = "Reading flash...";
-  memDumpEl.textContent = "";
-  btnMemExport.disabled = true;
-  btnMemExportHex.disabled = true;
-
-  const allWords = new Uint32Array(wordCount);
-  let offset = 0;
-  const transport = backend.core.transport;
-  const origLog = transport.log;
-  transport.log = null;
-  try {
-    while (offset < wordCount) {
-      const count = Math.min(chunkWords, wordCount - offset);
-      const chunk = await backend.adi.readMemBlockFast(flashStart + offset * 4, count);
-      allWords.set(chunk, offset);
-      offset += count;
-      const percent = Math.round((offset / wordCount) * 100);
-      memStatusEl.textContent = `Reading flash... ${percent}%`;
-    }
-    const bytes = new Uint8Array(allWords.buffer);
-    lastReadData = { addr: flashStart, bytes };
-    memDumpEl.textContent = formatHexDump(flashStart, bytes.slice(0, 256)); // show first 256B in dump
-    memDumpEl.hidden = false;
-    memStatusEl.textContent = `Read ${bytes.length} bytes of flash (showing first 256B, export for full)`;
-    btnMemExport.disabled = false;
-    btnMemExportHex.disabled = false;
-    readRegions = [{ start: flashStart, size: flashSize, ok: true }];
-    refreshVisualizer();
-  } catch (error) {
-    const normalized = normalizeError(error);
-    memStatusEl.textContent = `Flash read failed: ${normalized.message}`;
-  } finally {
-    transport.log = origLog;
-  }
-}
-
-function exportMemoryBin() {
-  if (!lastReadData) return;
-  const blob = new Blob([lastReadData.bytes], { type: "application/octet-stream" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `mem_0x${lastReadData.addr.toString(16)}_${lastReadData.bytes.length}B.bin`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function buildIntelHex(addr, bytes) {
-  const lines = [];
-  const hexByte = (v) => v.toString(16).padStart(2, "0").toUpperCase();
-  const record = (type, address, data) => {
-    const len = data.length;
-    let sum = len + type + ((address >> 8) & 0xff) + (address & 0xff);
-    for (const b of data) sum += b;
-    const checksum = ((~sum + 1) & 0xff);
-    const payload = data.map(hexByte).join("");
-    return `:${hexByte(len)}${address.toString(16).padStart(4,"0").toUpperCase()}${hexByte(type)}${payload}${hexByte(checksum)}`;
+    readRegions: window.readRegions || [],
   };
 
-  let currentSegBase = -1;
-  let offset = 0;
-  while (offset < bytes.length) {
-    const absAddr = addr + offset;
-    const segBase = absAddr >>> 16;
-    if (segBase !== currentSegBase) {
-      currentSegBase = segBase;
-      const extData = [(segBase >> 8) & 0xff, segBase & 0xff];
-      lines.push(record(4, 0, extData));
-    }
-    const chunkSize = Math.min(16, bytes.length - offset);
-    const chunk = Array.from(bytes.slice(offset, offset + chunkSize));
-    const lineAddr = absAddr & 0xffff;
-    lines.push(record(0, lineAddr, chunk));
-    offset += chunkSize;
-  }
-  lines.push(":00000001FF");
-  return lines.join("\r\n") + "\r\n";
+  renderFlashVisualizer(els.flashVisualizerEl, props);
 }
 
-function exportMemoryHex() {
-  if (!lastReadData) return;
-  const hexText = buildIntelHex(lastReadData.addr, lastReadData.bytes);
-  const blob = new Blob([hexText], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `mem_0x${lastReadData.addr.toString(16)}_${lastReadData.bytes.length}B.hex`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+async function init() {
+  const els = gatherElements();
 
-async function runProgramVerifyReset() {
-  if (!imageContext?.policy?.ok) {
-    setStatus("Program blocked: image is missing or failed policy checks");
-    return;
-  }
-  try {
-    setStatus("Programming image...");
-    await backend.programImage(imageContext.parsed, { mode: imageContext.mode });
-    setStatus("Verifying image...");
-    await backend.verifyImage(imageContext.parsed, { mode: imageContext.mode });
-    if (imageContext.map) {
-      readRegions = imageContext.map.segments.map((s) => ({ start: s.start, size: s.length, ok: true }));
-      refreshVisualizer();
-    }
-    setStatus("Resetting target...");
-    await backend.reset("run");
-    setStatus("Program → Verify → Reset complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Operation failed (${normalized.code}): ${normalized.message}`);
-  }
-}
+  // Initialize global services
+  progressBus = new ProgressBus();
+  backendManager = new BackendManager(
+    progressBus,
+    (msg) => logger.log(msg)
+  );
 
-// --- RTT ---
-function rttLog(msg) {
-  rttLogEl.textContent += msg;
-  rttLogEl.scrollTop = rttLogEl.scrollHeight;
-}
+  // Read saved backend from localStorage
+  const savedBackend = window.localStorage.getItem("backend-name") || "cmsis-dap";
+  els.backendSelect.value = savedBackend;
 
-async function runRttSearch() {
-  if (rttClient) { rttClient.stop(); rttClient = null; }
-  const ramStart = parseHexInput(rttRamStartInput.value);
-  const ramSizeKb = parseInt(rttRamSizeInput.value, 10);
-  if (isNaN(ramStart) || isNaN(ramSizeKb) || ramSizeKb <= 0) {
-    rttStatusEl.textContent = "Invalid RAM range";
-    return;
-  }
-  const ramSize = ramSizeKb * 1024;
-  rttStatusEl.textContent = `Searching 0x${ramStart.toString(16)} + ${ramSizeKb}KB…`;
-  btnRttSearch.disabled = true;
-  btnRttStart.disabled = true;
+  // Initialize all UI modules
+  logger.init(els);
+  settings.init(els);
+  connection.init(els, logger, backendManager);
+  hexManager.init(els, logger, connection);
+  flashOps.init(els, logger, hexManager, connection);
+  recovery.init(els, logger, connection);
+  memory.init(els, logger, connection);
+  uicr.init(els, logger, connection);
+  debug.init(els, logger, connection);
+  rtt.init(els, logger, connection);
+  uart.init(els, logger, connection);
+  swo.init(els, logger, connection);
 
-  rttClient = new RttClient(backend.adi);
-  try {
-    const found = await rttClient.search(ramStart, ramSize);
-    if (found) {
-      rttStatusEl.textContent = `Control block at 0x${rttClient.controlBlockAddr.toString(16)} — ${rttClient._upChannels.length} up, ${rttClient._downChannels.length} down channel(s)`;
-      btnRttStart.disabled = false;
-      if (rttClient._downChannels.length > 0) {
-        rttTxInput.disabled = false;
-        btnRttSend.disabled = false;
-      }
-    } else {
-      rttStatusEl.textContent = "RTT control block not found in RAM range";
-      rttClient = null;
-    }
-  } catch (error) {
-    rttStatusEl.textContent = `Search failed: ${normalizeError(error).message}`;
-    rttClient = null;
-  }
-  btnRttSearch.disabled = !connected;
-}
-
-function runRttStart() {
-  if (!rttClient) return;
-  const intervalMs = parseInt(rttIntervalInput.value, 10) || 50;
-  rttClient
-    .on("data", ({ channel, data }) => {
-      const text = new TextDecoder().decode(data);
-      rttLog(text);
-    })
-    .on("error", (err) => {
-      rttStatusEl.textContent = `Poll error: ${err.message}`;
-    });
-  rttClient.startPolling(intervalMs);
-  rttStatusEl.textContent = `Polling channel(s) every ${intervalMs}ms…`;
-  btnRttStart.disabled = true;
-  btnRttStop.disabled = false;
-}
-
-function runRttStop() {
-  if (!rttClient) return;
-  rttClient.stop();
-  rttStatusEl.textContent = "Stopped";
-  btnRttStart.disabled = false;
-  btnRttStop.disabled = true;
-}
-
-async function runRttSend() {
-  if (!rttClient) return;
-  const text = rttTxInput.value;
-  if (!text) return;
-  try {
-    const bytes = new TextEncoder().encode(text + "\n");
-    await rttClient.write(0, bytes);
-    rttTxInput.value = "";
-  } catch (error) {
-    rttStatusEl.textContent = `Send failed: ${normalizeError(error).message}`;
-  }
-}
-
-// --- UART passthrough ---
-function uartLog(text) {
-  uartLogEl.textContent += text;
-  uartLogEl.scrollTop = uartLogEl.scrollHeight;
-}
-
-async function openUartSession() {
-  if (!backend.hasUART) {
-    uartStatusEl.textContent = "Probe does not support UART (capability bit 7 not set)";
-    return;
-  }
-  const baudRate = parseInt(uartBaudSelect.value, 10);
-  uartStatusEl.textContent = `Opening at ${baudRate} baud…`;
-  try {
-    await backend.openUart({
-      baudRate,
-      onData: (bytes) => uartLog(new TextDecoder().decode(bytes)),
-      pollIntervalMs: 20
-    });
-    uartOpen = true;
-    btnUartOpen.disabled = true;
-    btnUartClose.disabled = false;
-    uartTxInput.disabled = false;
-    btnUartSend.disabled = false;
-    uartStatusEl.textContent = `Open at ${baudRate} baud`;
-    log(`UART opened at ${baudRate} baud`);
-  } catch (error) {
-    uartStatusEl.textContent = `Open failed: ${normalizeError(error).message}`;
-    log(`UART open failed: ${normalizeError(error).message}`);
-  }
-}
-
-async function closeUartSession() {
-  try {
-    await backend.closeUart();
-  } catch { /* ignore */ }
-  uartOpen = false;
-  btnUartOpen.disabled = !backend.hasUART;
-  btnUartClose.disabled = true;
-  uartTxInput.disabled = true;
-  btnUartSend.disabled = true;
-  uartStatusEl.textContent = "Closed";
-  log("UART closed");
-}
-
-async function sendUartData() {
-  const text = uartTxInput.value;
-  if (!text || !uartOpen) return;
-  try {
-    await backend.sendUart(new TextEncoder().encode(text));
-    uartTxInput.value = "";
-  } catch (error) {
-    uartStatusEl.textContent = `Send failed: ${normalizeError(error).message}`;
-  }
-}
-
-// --- SWO / ITM ---
-function swoLog(text) {
-  swoLogEl.textContent += text;
-  swoLogEl.scrollTop = swoLogEl.scrollHeight;
-}
-
-async function openSwoSession() {
-  const baudRate = parseInt(swoBaudInput.value, 10) || 1000000;
-  swoStatusEl.textContent = `Opening at ${baudRate} baud…`;
-  try {
-    const actual = await backend.openSwo({
-      baudRate,
-      onData: (bytes) => swoLog(new TextDecoder().decode(bytes)),
-      pollIntervalMs: 50
-    });
-    swoOpen = true;
-    btnSwoOpen.disabled = true;
-    btnSwoClose.disabled = false;
-    swoStatusEl.textContent = `Open at ${actual} baud (requested ${baudRate})`;
-    log(`SWO opened at ${actual} baud`);
-  } catch (e) {
-    swoStatusEl.textContent = `Open failed: ${normalizeError(e).message}`;
-  }
-}
-
-async function closeSwoSession() {
-  try { await backend.closeSwo(); } catch { /* ignore */ }
-  swoOpen = false;
-  btnSwoOpen.disabled = !backend.hasSWO;
-  btnSwoClose.disabled = true;
-  swoStatusEl.textContent = "Closed";
-  log("SWO closed");
-}
-
-// --- UICR ---
-const UICR_REGS = [
-  { name: "CLENR0",      addr: 0x10001000 },
-  { name: "RBPCONF",     addr: 0x10001004 },
-  { name: "XTALFREQ",   addr: 0x10001008 },
-  { name: "FWID",        addr: 0x10001010 },
-  { name: "NRFFW[0]",   addr: 0x10001014 },
-  { name: "NRFFW[1]",   addr: 0x10001018 },
-  { name: "NRFHW[0]",   addr: 0x10001050 },
-  { name: "CUSTOMER[0]",addr: 0x10001080 },
-  { name: "CUSTOMER[1]",addr: 0x10001084 },
-  { name: "CUSTOMER[2]",addr: 0x10001088 },
-  { name: "CUSTOMER[3]",addr: 0x1000108c },
-  { name: "PSELRESET[0]",addr: 0x10001200 },
-  { name: "PSELRESET[1]",addr: 0x10001204 },
-  { name: "APPROTECT",  addr: 0x10001208 },
-  { name: "NFCPINS",    addr: 0x1000120c },
-  { name: "DEBUGCTRL",  addr: 0x10001210 },
-  { name: "REGOUT0",    addr: 0x10001304 },
-];
-
-async function runUicrRead() {
-  uicrStatusEl.textContent = "Reading UICR...";
-  uicrDumpEl.textContent = "";
-  try {
-    const lines = [];
-    for (const { name, addr } of UICR_REGS) {
-      const val = await backend.adi.readMem32(addr);
-      lines.push(`${name.padEnd(14)}: 0x${val.toString(16).padStart(8, "0")} (${addr.toString(16).toUpperCase()})`);
-    }
-    uicrDumpEl.textContent = lines.join("\n");
-    uicrDumpEl.hidden = false;
-    uicrStatusEl.textContent = "UICR read complete";
-    log("UICR read complete");
-  } catch (e) {
-    uicrStatusEl.textContent = `UICR read failed: ${normalizeError(e).message}`;
-  }
-}
-
-// --- Debug (Cortex-M) ---
-async function runCoreHalt() {
-  debugStatusEl.textContent = "Halting...";
-  try {
-    await backend.haltCore();
-    debugStatusEl.textContent = "Halted";
-    log("Core halted");
-  } catch (e) {
-    debugStatusEl.textContent = `Halt failed: ${normalizeError(e).message}`;
-  }
-}
-
-async function runCoreResume() {
-  debugStatusEl.textContent = "Resuming...";
-  try {
-    await backend.resumeCore();
-    debugStatusEl.textContent = "Running";
-    log("Core resumed");
-  } catch (e) {
-    debugStatusEl.textContent = `Resume failed: ${normalizeError(e).message}`;
-  }
-}
-
-async function runCoreStep() {
-  debugStatusEl.textContent = "Stepping...";
-  try {
-    await backend.stepCore();
-    debugStatusEl.textContent = "Stepped (halted)";
-    log("Core stepped");
-  } catch (e) {
-    debugStatusEl.textContent = `Step failed: ${normalizeError(e).message}`;
-  }
-}
-
-async function runCoreRegs() {
-  debugStatusEl.textContent = "Reading registers...";
-  debugRegsEl.textContent = "";
-  try {
-    const regs = await backend.readCoreRegs();
-    const lines = Object.entries(regs).map(([name, val]) =>
-      `${name.padEnd(5)}: 0x${val.toString(16).padStart(8, "0")}`
-    );
-    debugRegsEl.textContent = lines.join("\n");
-    debugRegsEl.hidden = false;
-    debugStatusEl.textContent = "Registers read";
-  } catch (e) {
-    debugStatusEl.textContent = `Register read failed: ${normalizeError(e).message}`;
-  }
-}
-
-// --- Backend / clock change ---
-async function onBackendChanged(event) {
-  const name = event.target.value;
-  if (connected) await disconnectProbe();
-  backend = backendManager.setBackend(name);
-  window.localStorage.setItem("backend-name", name);
-  log(`Backend selected: ${name}`);
-  checkCompatibility();
-  updateOperationButtons();
-}
-
-function onClockChanged() {
-  const hz = parseInt(clockSelect.value, 10);
-  backendManager.setSwdClockHz(hz);
-  log(`SWD clock set to ${hz / 1000} kHz`);
-  if (connected) log("SWD clock change will take effect on next connect.");
-}
-
-// --- Event listeners ---
-btnConnect.addEventListener("click", connectProbe);
-btnDisconnect.addEventListener("click", disconnectProbe);
-btnProgram.addEventListener("click", runProgram);
-btnVerify.addEventListener("click", runVerify);
-btnReset.addEventListener("click", runReset);
-fileInput.addEventListener("change", onFirmwareSelected);
-btnFetchHex.addEventListener("click", onFetchHex);
-btnLoadBuiltin.addEventListener("click", onLoadBuiltin);
-btnClearHex.addEventListener("click", onClearHex);
-backendSelect.addEventListener("change", onBackendChanged);
-clockSelect.addEventListener("change", onClockChanged);
-chkConfirmProgram.addEventListener("change", updateOperationButtons);
-btnCheckProtection.addEventListener("click", runCheckProtection);
-btnRecover.addEventListener("click", runRecoverDevice);
-btnSwoOpen.addEventListener("click", openSwoSession);
-btnSwoClose.addEventListener("click", closeSwoSession);
-btnSwoClear.addEventListener("click", () => { swoLogEl.textContent = ""; });
-btnUicrRead.addEventListener("click", runUicrRead);
-btnCoreHalt.addEventListener("click", runCoreHalt);
-btnCoreResume.addEventListener("click", runCoreResume);
-btnCoreStep.addEventListener("click", runCoreStep);
-btnCoreRegs.addEventListener("click", runCoreRegs);
-btnMemRead.addEventListener("click", runReadMemory);
-btnMemReadFlash.addEventListener("click", runReadAllFlash);
-btnMemExport.addEventListener("click", exportMemoryBin);
-btnMemExportHex.addEventListener("click", exportMemoryHex);
-document.getElementById("btn-program-verify-reset").addEventListener("click", runProgramVerifyReset);
-btnRttSearch.addEventListener("click", runRttSearch);
-btnRttStart.addEventListener("click", runRttStart);
-btnRttStop.addEventListener("click", runRttStop);
-btnRttClear.addEventListener("click", () => { rttLogEl.textContent = ""; });
-btnRttSend.addEventListener("click", runRttSend);
-rttTxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runRttSend(); });
-btnUartOpen.addEventListener("click", openUartSession);
-btnUartClose.addEventListener("click", closeUartSession);
-btnUartClear.addEventListener("click", () => { uartLogEl.textContent = ""; });
-btnUartSend.addEventListener("click", sendUartData);
-uartTxInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendUartData(); });
-
-document.getElementById("flash-mode-select").addEventListener("change", () => mergeAndUpdate());
-
-targetSelect.addEventListener("change", () => {
-  const val = targetSelect.value;
-  try {
-    backend.setTargetOverride(val === "auto" ? null : val);
-    topbarTarget.textContent = backend.activeTarget?.label ?? "Connected";
-    log(`Target override: ${val === "auto" ? "auto-detect" : val}`);
-    mergeAndUpdate();
+  // Setup callbacks for connection state changes
+  connection.setConnectedCallback((backend) => {
+    logger.log("Connected");
+    flashOps.onConnect(backend);
+    recovery.onConnect(backend);
+    memory.onConnect(backend);
+    uicr.onConnect(backend);
+    debug.onConnect(backend);
+    rtt.onConnect(backend);
+    uart.onConnect(backend);
+    swo.onConnect(backend);
+    hexManager.onConnect(backend);
     refreshVisualizer();
-  } catch (e) {
-    log(`Target change failed: ${e.message}`);
-  }
-});
+  });
 
-progressBus.subscribe((event) => {
-  log(`[${event.type}] ${event.message}`);
-  if (typeof event.percent === "number") {
-    setProgress(event.percent < 100 ? event.percent : null);
-  }
-});
+  connection.setDisconnectedCallback(() => {
+    logger.log("Disconnected");
+    flashOps.onDisconnect();
+    recovery.onDisconnect();
+    memory.onDisconnect();
+    uicr.onDisconnect();
+    debug.onDisconnect();
+    rtt.onDisconnect();
+    uart.onDisconnect();
+    swo.onDisconnect();
+    hexManager.onDisconnect();
+    refreshVisualizer();
+  });
 
-// Collapsible event log
-logEl.addEventListener("click", () => {
-  logEl.classList.toggle("log-collapsed");
-});
+  // Setup callbacks for image changes
+  hexManager.setOnImageChangeCallback(() => {
+    flashOps.updateOperationButtons();
+    refreshVisualizer();
+  });
 
-// --- Console debug helpers ---
-window.diagRead = async (addr = 0x0) => {
-  window._imageContext = imageContext;
-  window._adi = backend.adi;
-  if (!connected) { log("Not connected"); return; }
-  try {
-    const results = await backend.diagRawRead32(addr);
-    for (const [step, msg] of Object.entries(results)) log(`  ${step}: ${msg}`);
-    return results;
-  } catch (e) { log(`diagRead failed: ${e.message}`); }
-};
+  // Setup visualizer refresh callbacks
+  flashOps.setRefreshVisualizerCallback(refreshVisualizer);
+  memory.setRefreshVisualizerCallback(refreshVisualizer);
 
-window.readMem32 = async (addr) => {
-  if (!connected) { log("Not connected"); return; }
-  try {
-    const val = await backend.adi.readMem32(addr);
-    log(`readMem32(0x${addr.toString(16)}): 0x${val.toString(16)}`);
-    return val;
-  } catch (e) { log(`readMem32 failed: ${e.message}`); }
-};
+  // Wire event listeners
+  els.btnConnect.addEventListener("click", connection.connectProbe);
+  els.btnDisconnect.addEventListener("click", connection.disconnectProbe);
 
-window.readMemRange = async (startAddr, count) => {
-  if (!connected) { log("Not connected"); return; }
-  try {
-    const results = [];
-    for (let i = 0; i < count; i++) {
-      const val = await backend.adi.readMem32(startAddr + i * 4);
-      results.push(`0x${val.toString(16)}`);
+  els.btnFetchHex.addEventListener("click", hexManager.onFetchHex);
+  els.btnLoadBuiltin.addEventListener("click", hexManager.onLoadBuiltin);
+  els.fileInput.addEventListener("change", hexManager.onFirmwareSelected);
+  els.btnClearHex.addEventListener("click", hexManager.onClearHex);
+
+  els.btnProgram.addEventListener("click", flashOps.runProgram);
+  els.btnVerify.addEventListener("click", flashOps.runVerify);
+  els.btnReset.addEventListener("click", flashOps.runReset);
+  els.btnProgramVerifyReset.addEventListener("click", flashOps.runProgramVerifyReset);
+  els.chkConfirmProgram.addEventListener("change", () => flashOps.updateOperationButtons());
+
+  els.btnCheckProtection.addEventListener("click", recovery.runCheckProtection);
+  els.btnRecover.addEventListener("click", recovery.runRecoverDevice);
+
+  els.btnMemRead.addEventListener("click", memory.runReadMemory);
+  els.btnMemReadFlash.addEventListener("click", memory.runReadAllFlash);
+  els.btnMemExport.addEventListener("click", memory.exportMemoryBin);
+  els.btnMemExportHex.addEventListener("click", memory.exportMemoryHex);
+
+  els.btnUicrRead.addEventListener("click", uicr.runUicrRead);
+
+  els.btnCoreHalt.addEventListener("click", debug.runCoreHalt);
+  els.btnCoreResume.addEventListener("click", debug.runCoreResume);
+  els.btnCoreStep.addEventListener("click", debug.runCoreStep);
+  els.btnCoreRegs.addEventListener("click", debug.runCoreRegs);
+
+  els.btnRttSearch.addEventListener("click", rtt.runRttSearch);
+  els.btnRttStart.addEventListener("click", rtt.runRttStart);
+  els.btnRttStop.addEventListener("click", rtt.runRttStop);
+  els.btnRttClear.addEventListener("click", () => { els.rttLogEl.textContent = ""; });
+  els.btnRttSend.addEventListener("click", rtt.runRttSend);
+
+  els.btnUartOpen.addEventListener("click", uart.openUartSession);
+  els.btnUartClose.addEventListener("click", uart.closeUartSession);
+  els.btnUartClear.addEventListener("click", () => { els.uartLogEl.textContent = ""; });
+  els.btnUartSend.addEventListener("click", uart.sendUartData);
+
+  els.btnSwoOpen.addEventListener("click", swo.openSwoSession);
+  els.btnSwoClose.addEventListener("click", swo.closeSwoSession);
+  els.btnSwoClear.addEventListener("click", () => { els.swoLogEl.textContent = ""; });
+
+  els.backendSelect.addEventListener("change", connection.onBackendChanged);
+  els.clockSelect.addEventListener("change", connection.onClockChanged);
+
+  // Progress bus subscription
+  progressBus.subscribe((event) => {
+    if (event.type === "progress") {
+      connection.setProgress(event.percent);
+    } else if (event.type === "log") {
+      logger.log(event.message);
     }
-    log(`readMemRange(0x${startAddr.toString(16)}, ${count}): ${results.join(", ")}`);
-    return results;
-  } catch (e) { log(`readMemRange failed: ${e.message}`); }
-};
+  });
 
-window.rawTest = async () => {
-  if (!connected) { log("Not connected"); return; }
-  const adi = backend.adi;
-  const NVMC_BASE = 0x4001e000;
-  const NVMC_READY = NVMC_BASE + 0x400;
-  const NVMC_CONFIG = NVMC_BASE + 0x504;
-  const NVMC_ERASEPAGE = NVMC_BASE + 0x508;
-  const waitRdy = async () => { for (let i = 0; i < 200; i++) { if ((await adi.readMem32(NVMC_READY)) & 1) return; } throw new Error("NVMC not ready"); };
+  // Collapsible log
+  els.logEl.addEventListener("click", function() {
+    this.classList.toggle("log-collapsed");
+  });
 
-  log("rawTest: erasing page 0x27000...");
-  await adi.writeMem32(NVMC_CONFIG, 2); await waitRdy();
-  await adi.writeMem32(NVMC_ERASEPAGE, 0x27000); await waitRdy();
-
-  log("rawTest: reading erased page...");
-  const e0 = await adi.readMem32(0x27000);
-  log(`  erased: 0x27000=0x${e0.toString(16)}`);
-
-  log("rawTest: writing via writeMem32...");
-  await adi.writeMem32(NVMC_CONFIG, 1); await waitRdy();
-  await adi.writeMem32(0x27000, 0xDEADBEEF);
-  await waitRdy();
-  await adi.writeMem32(NVMC_CONFIG, 0); await waitRdy();
-
-  const r0 = await adi.readMem32(0x27000);
-  log(`  readback: 0x27000=0x${r0.toString(16)}, match: ${r0 === 0xDEADBEEF}`);
-  return { erased: e0, readback: r0 };
-};
-
-window.blockReadTest = async () => {
-  if (!connected) { log("Not connected"); return; }
-  const adi = backend.adi;
-  log(`blockReadTest: reading 8 words at 0x0...`);
-  const block = await adi.readMemBlockFast(0x0, 8);
-  log(`  block: ${Array.from(block).map(v => "0x" + v.toString(16)).join(", ")}`);
-  return Array.from(block);
-};
-
-// --- Firmware availability check ---
-if (builtinSelect) {
-  const probeUrl = builtinSelect.options[1]?.value;
-  if (probeUrl) {
-    fetch(probeUrl, { method: "HEAD" }).then((r) => {
-      if (r.ok) {
-        builtinSelect.hidden = false;
-        btnLoadBuiltin.hidden = false;
-      }
-    }).catch(() => { /* firmware not available */ });
-  }
-}
-
-// --- Init ---
-if (checkCompatibility()) {
-  log(`Backend selected: ${selectedBackendName}`);
-  updateOperationButtons();
+  // Compatibility check
+  connection.checkCompatibility();
+  flashOps.updateOperationButtons();
   refreshVisualizer();
-  setStatus("Ready");
+  logger.setStatus("Ready");
 }
+
+// Wait for DOM
+document.addEventListener("DOMContentLoaded", init);

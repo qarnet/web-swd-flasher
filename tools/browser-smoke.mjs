@@ -45,11 +45,6 @@ async function readLogTail(page) {
   });
 }
 
-if (HEADLESS) {
-  console.error("HEADLESS=1 is not supported for chooser smoke tests.");
-  process.exit(2);
-}
-
 async function launchBrowser() {
   const args = [
     "--enable-features=WebUSB,WebBluetooth,WebBluetoothNewPermissionsBackend",
@@ -58,12 +53,16 @@ async function launchBrowser() {
     "--disable-popup-blocking"
   ];
 
+  if (HEADLESS) {
+    args.push("--headless=new");
+  }
+
   if (AUTO_SELECT_USB_RULE) {
     args.push(`--auto-select-usb-devices-for-urls=${AUTO_SELECT_USB_RULE}`);
   }
 
   return puppeteer.launch({
-    headless: false,
+    headless: HEADLESS ? "new" : false,
     executablePath: CHROME_BIN,
     args
   });
@@ -101,6 +100,10 @@ async function main() {
       info("Mock backend selected; chooser path skipped");
       step("Smoke test passed");
       return;
+    }
+
+    if (HEADLESS) {
+      throw new Error("HEADLESS=1 is not supported for non-mock backends (WebUSB chooser requires a display)");
     }
 
     try {
