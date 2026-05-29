@@ -145,6 +145,13 @@ button[disabled] {
   cursor: not-allowed;
 }
 
+label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 select, input[type="text"], input[type="number"] {
   border: 1px solid var(--border);
   background: var(--panel);
