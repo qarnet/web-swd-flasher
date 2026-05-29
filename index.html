@@ -66,8 +66,8 @@
         <h2>Firmware Image</h2>
         <div class="row">
           <input id="file-input" type="file" accept=".hex,.ihex" multiple />
-          <input id="url-input" type="text" placeholder="or add .hex URL…" value="test-blinky.hex" />
-          <select id="flash-mode-select">
+          <input id="url-input" type="text" placeholder="or add .hex URL…" value="test-blinky.hex" style="width:8rem;" />
+          <select id="flash-mode-select" style="width:11rem;">
             <option value="app-only">App only (0x26000+)</option>
             <option value="full-flash" selected>Full flash (0x0+)</option>
           </select>
@@ -79,7 +79,7 @@
         <div id="file-list" style="margin-top:0.5rem;"></div>
         <div id="flash-visualizer" style="margin:0.75rem 0;"></div>
 
-        <div class="row">
+        <div class="row button-row">
           <button id="btn-program" type="button" disabled>Program</button>
           <button id="btn-verify" type="button" disabled>Verify</button>
           <button id="btn-reset" type="button" disabled>Reset Run</button>

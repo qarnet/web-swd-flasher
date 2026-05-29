@@ -116,6 +116,16 @@ h1 { margin-bottom: 0.25rem; }
   align-items: center;
 }
 
+.row + .row {
+  margin-top: 0.75rem;
+}
+
+.button-row button {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
 .confirm {
   display: inline-flex;
   align-items: center;
@@ -152,13 +162,17 @@ label {
   white-space: nowrap;
 }
 
-select, input[type="text"], input[type="number"] {
+select, input[type="text"], input[type="number"], input[type="file"] {
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--fg);
   padding: 0.45rem 0.6rem;
   border-radius: 8px;
   font-size: 0.9rem;
+}
+
+input[type="file"] {
+  max-width: 11rem;
 }
 
 select:focus, input[type="text"]:focus, input[type="number"]:focus {
