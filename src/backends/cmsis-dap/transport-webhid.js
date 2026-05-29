@@ -1,4 +1,39 @@
-const CMSIS_DAP_HID_FILTERS = [];
+const CMSIS_DAP_HID_FILTERS = [
+  { vendorId: 0x0d28, productId: 0x0204 },
+  { vendorId: 0x2e8a, productId: 0x0004 },
+  { vendorId: 0x2e8a, productId: 0x000c },
+  { vendorId: 0x2e8a, productId: 0xf00a },
+  { vendorId: 0xc251, productId: 0x2750 },
+  { vendorId: 0x1fc9, productId: 0x0090 },
+  { vendorId: 0x1fc9, productId: 0x0143 },
+  { vendorId: 0x03eb, productId: 0x2111 },
+  { vendorId: 0x03eb, productId: 0x2140 },
+  { vendorId: 0x03eb, productId: 0x2141 },
+  { vendorId: 0x03eb, productId: 0x2144 },
+  { vendorId: 0x03eb, productId: 0x2145 },
+  { vendorId: 0x03eb, productId: 0x216c },
+  { vendorId: 0x03eb, productId: 0x2175 },
+  { vendorId: 0x04b4, productId: 0xf138 },
+  { vendorId: 0x04b4, productId: 0xf148 },
+  { vendorId: 0x04b4, productId: 0xf151 },
+  { vendorId: 0x04b4, productId: 0xf152 },
+  { vendorId: 0x04b4, productId: 0xf154 },
+  { vendorId: 0x04b4, productId: 0xf155 },
+  { vendorId: 0x04b4, productId: 0xf166 },
+  { vendorId: 0x0483, productId: 0x3748 },
+  { vendorId: 0x0483, productId: 0x374b },
+  { vendorId: 0x0483, productId: 0x374d },
+  { vendorId: 0x0483, productId: 0x374e },
+  { vendorId: 0x0483, productId: 0x374f },
+  { vendorId: 0x0483, productId: 0x3752 },
+  { vendorId: 0x0483, productId: 0x3753 },
+  { vendorId: 0x0483, productId: 0x3754 },
+  { vendorId: 0x0483, productId: 0x3755 },
+  { vendorId: 0x0483, productId: 0x3757 },
+  { vendorId: 0x0483, productId: 0x572a },
+  { vendorId: 0x30cc, productId: 0x9527 },
+  { usagePage: 0xff00, usage: 0x01 },
+];
 
 export class CmsisDapWebHidTransport {
   constructor(logger = null) {
@@ -21,11 +56,13 @@ export class CmsisDapWebHidTransport {
   async requestDevice() {
     const known = await navigator.hid.getDevices();
     this.debug("authorized-devices", known.map((d) => ({ vendorId: d.vendorId, productId: d.productId, productName: d.productName })));
-    if (known.length === 1) {
-      this.device = known[0];
-      return known[0];
+    const vids = CMSIS_DAP_HID_FILTERS.filter((f) => f.vendorId).map((f) => f.vendorId);
+    const cached = known.find((dev) => vids.includes(dev.vendorId));
+    if (cached) {
+      this.device = cached;
+      return this.device;
     }
-    const picked = await navigator.hid.requestDevice({ filters: [] });
+    const picked = await navigator.hid.requestDevice({ filters: CMSIS_DAP_HID_FILTERS });
     if (!picked.length) {
       throw new Error("No HID device selected");
     }

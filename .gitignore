@@ -3,5 +3,9 @@ tools/package-lock.json
 *.png
 .direnv/
 .envrc
-*.hex
+/*.hex
 *.log
+firmware/
+cert.pem
+key.pem
+rootCA.pem

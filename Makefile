@@ -1,7 +1,10 @@
-.PHONY: serve tools-install test browser-smoke browser-smoke-xvfb
+.PHONY: serve serve-https tools-install test browser-smoke browser-smoke-xvfb
 
 serve:
 	python -m http.server 8000
+
+serve-https:
+	python3 serve-https.py 8443
 
 tools-install:
 	PUPPETEER_SKIP_DOWNLOAD=1 npm --prefix tools install

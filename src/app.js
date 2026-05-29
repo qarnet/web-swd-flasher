@@ -27,6 +27,7 @@ const imageSummary = document.getElementById("image-summary");
 const imageMapEl = document.getElementById("image-map");
 const btnFetchHex = document.getElementById("btn-fetch-hex");
 const btnLoadBuiltin = document.getElementById("btn-load-builtin");
+const builtinSelect = document.getElementById("builtin-select");
 const btnClearHex = document.getElementById("btn-clear-hex");
 const clockSelect = document.getElementById("clock-select");
 const probeCapsEl = document.getElementById("probe-caps");
@@ -489,12 +490,18 @@ async function onFetchHex() {
 }
 
 async function onLoadBuiltin() {
-  setStatus("Loading built-in firmware…");
+  const url = builtinSelect.value;
+  if (!url) {
+    setStatus("Select a firmware variant first");
+    return;
+  }
+  const name = builtinSelect.options[builtinSelect.selectedIndex].textContent;
+  setStatus(`Loading ${name}…`);
   try {
-    const response = await fetch("test-blinky.hex");
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
-    addHexFromText("blinky.hex", text);
+    addHexFromText(`${name}.hex`, text);
     setStatus("Ready");
   } catch (error) {
     log(`Built-in load failed: ${error.message}`);
@@ -1206,6 +1213,19 @@ window.blockReadTest = async () => {
   log(`  block: ${Array.from(block).map(v => "0x" + v.toString(16)).join(", ")}`);
   return Array.from(block);
 };
+
+// --- Firmware availability check ---
+if (builtinSelect) {
+  const probeUrl = builtinSelect.options[1]?.value;
+  if (probeUrl) {
+    fetch(probeUrl, { method: "HEAD" }).then((r) => {
+      if (r.ok) {
+        builtinSelect.hidden = false;
+        btnLoadBuiltin.hidden = false;
+      }
+    }).catch(() => { /* firmware not available */ });
+  }
+}
 
 // --- Init ---
 if (checkCompatibility()) {

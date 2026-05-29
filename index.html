@@ -66,13 +66,20 @@
         <h2>Firmware Image</h2>
         <div class="row">
           <input id="file-input" type="file" accept=".hex,.ihex" multiple />
-          <input id="url-input" type="text" placeholder="or add .hex URL…" value="test-blinky.hex" style="width:8rem;" />
+          <input id="url-input" type="text" placeholder="or add .hex URL…" style="width:8rem;" />
           <select id="flash-mode-select" style="width:11rem;">
             <option value="app-only">App only (0x26000+)</option>
             <option value="full-flash" selected>Full flash (0x0+)</option>
           </select>
           <button id="btn-fetch-hex" type="button">Fetch URL</button>
-          <button id="btn-load-builtin" type="button">Load Blinky</button>
+          <select id="builtin-select" style="width:11rem;" hidden>
+            <option value="">— Blinky —</option>
+            <option value="firmware/blinky-xiao_ble-bare.hex">bare (0x0000)</option>
+            <option value="firmware/blinky-xiao_mbr.hex">MBR (0x1000)</option>
+            <option value="firmware/blinky-xiao_sdv6.hex">UF2 SDv6 (0x26000)</option>
+            <option value="firmware/blinky-xiao_sdv7.hex">UF2 SDv7 (0x27000)</option>
+          </select>
+          <button id="btn-load-builtin" type="button" hidden>Load</button>
           <button id="btn-clear-hex" type="button">Clear All</button>
         </div>
 
