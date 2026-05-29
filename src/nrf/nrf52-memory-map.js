@@ -26,17 +26,22 @@ export function validateAppRange(imageMap, mode = "app-only", targetDescriptor =
   const allowStart = mode === "full-flash" ? bounds.flashStart : bounds.appStart;
 
   for (const segment of imageMap.segments) {
-    if (segment.start < allowStart) {
+    // In full-flash mode, allow writes to bootloader and UICR regions
+    const isUicrSegment = segment.start >= bounds.uicrBase && segment.start < bounds.uicrBase + 0x1000;
+    const isBootloaderSegment = segment.start < bounds.appStart;
+
+    if (!isUicrSegment && segment.start < allowStart) {
       violations.push(
         `segment starts below allowed flash at 0x${segment.start.toString(16).padStart(8, "0")}`
       );
     }
-    if (segment.end > bounds.flashEnd) {
+    if (segment.end > bounds.uicrBase && !isUicrSegment) {
       violations.push(
         `segment ends beyond flash limit at 0x${segment.end.toString(16).padStart(8, "0")}`
       );
     }
-    if (segment.start >= bounds.uicrBase && segment.start < bounds.uicrBase + 0x1000) {
+    // Only reject UICR writes in app-only mode, allow in full-flash mode
+    if (isUicrSegment && mode !== "full-flash") {
       violations.push(
         `segment intersects UICR at 0x${segment.start.toString(16).padStart(8, "0")}`
       );
