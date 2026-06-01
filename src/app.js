@@ -330,7 +330,8 @@ async function init() {
   refreshVisualizer();
   const buildTimeEl = document.getElementById("topbar-build-time");
   if (buildTimeEl && BUILD_TIMESTAMP !== "__BUILD_TIMESTAMP__") {
-    buildTimeEl.textContent = BUILD_TIMESTAMP;
+    const d = new Date(BUILD_TIMESTAMP + "Z");
+    buildTimeEl.textContent = isNaN(d) ? BUILD_TIMESTAMP : d.toLocaleString();
   }
   logger.setStatus("Ready");
 }
