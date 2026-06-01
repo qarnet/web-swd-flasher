@@ -234,6 +234,17 @@ async function onBackendChanged(event) {
   updateOperationButtons();
 }
 
+// Tab switching
+const tabBtns = document.querySelectorAll(".tab-btn");
+const tabPanels = document.querySelectorAll(".tab-panel");
+
+function switchTab(tabId) {
+  tabBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabId));
+  tabPanels.forEach(panel => { panel.hidden = panel.id !== `tab-${tabId}`; });
+}
+
+tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+
 btnConnect.addEventListener("click", connectProbe);
 btnDisconnect.addEventListener("click", disconnectProbe);
 btnProgram.addEventListener("click", runProgram);

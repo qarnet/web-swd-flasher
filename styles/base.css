@@ -94,3 +94,50 @@ button[disabled] {
   border-radius: 8px;
   overflow: auto;
 }
+
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 1rem;
+  padding: 0.3rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tab-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0.85rem;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tab-btn:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tab-panel {
+  margin-top: 0.5rem;
+}
+
+.stub-msg {
+  color: var(--muted);
+  font-style: italic;
+}
+
+#event-log-panel {
+  margin-top: 1.5rem;
+}

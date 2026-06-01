@@ -16,7 +16,19 @@
         <span id="compat-msg"></span>
       </section>
 
-      <section class="panel">
+      <nav class="tab-bar" role="tablist">
+        <button class="tab-btn active" role="tab" data-tab="connection">Connection</button>
+        <button class="tab-btn" role="tab" data-tab="recovery">Device Recovery</button>
+        <button class="tab-btn" role="tab" data-tab="firmware">Firmware Image</button>
+        <button class="tab-btn" role="tab" data-tab="debug">Debug</button>
+        <button class="tab-btn" role="tab" data-tab="memory">Memory Read</button>
+        <button class="tab-btn" role="tab" data-tab="uicr">UICR</button>
+        <button class="tab-btn" role="tab" data-tab="rtt">RTT</button>
+        <button class="tab-btn" role="tab" data-tab="uart">UART Pass-through</button>
+      </nav>
+
+      <!-- Connection -->
+      <section id="tab-connection" class="panel tab-panel">
         <h2>Connection</h2>
         <div class="row">
           <label for="backend-select">Backend</label>
@@ -35,7 +47,14 @@
         <pre id="target-info" class="log"></pre>
       </section>
 
-      <section class="panel">
+      <!-- Device Recovery -->
+      <section id="tab-recovery" class="panel tab-panel" hidden>
+        <h2>Device Recovery</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- Firmware Image -->
+      <section id="tab-firmware" class="panel tab-panel" hidden>
         <h2>Firmware Image</h2>
         <div class="row">
           <input id="file-input" type="file" accept=".hex,.ihex" />
@@ -53,7 +72,38 @@
         <pre id="image-map" class="log"></pre>
       </section>
 
-      <section class="panel">
+      <!-- Debug -->
+      <section id="tab-debug" class="panel tab-panel" hidden>
+        <h2>Debug</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- Memory Read -->
+      <section id="tab-memory" class="panel tab-panel" hidden>
+        <h2>Memory Read</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- UICR -->
+      <section id="tab-uicr" class="panel tab-panel" hidden>
+        <h2>UICR</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- RTT -->
+      <section id="tab-rtt" class="panel tab-panel" hidden>
+        <h2>RTT</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- UART Pass-through -->
+      <section id="tab-uart" class="panel tab-panel" hidden>
+        <h2>UART Pass-through</h2>
+        <p class="stub-msg">Not yet implemented.</p>
+      </section>
+
+      <!-- Event Log — always visible -->
+      <section class="panel" id="event-log-panel">
         <h2>Event Log</h2>
         <pre id="log" class="log"></pre>
       </section>
