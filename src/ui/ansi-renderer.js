@@ -71,9 +71,6 @@ export class AnsiRenderer {
         i = nextEsc;
       }
     }
-    if (this._autoScroll && el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
-      el.scrollTop = el.scrollHeight;
-    }
   }
 
   _applySgr(params) {
@@ -128,10 +125,6 @@ export class AnsiRenderer {
 
   get plainText() {
     return this._plainLog;
-  }
-
-  set autoScroll(v) {
-    this._autoScroll = v;
   }
 
   reset() {

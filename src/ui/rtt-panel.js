@@ -1,12 +1,11 @@
 import { RttClient } from "../rtt/rtt-client.js";
 import { normalizeError } from "../core/errors.js";
 import { AnsiRenderer } from "./ansi-renderer.js";
-import { downloadLog, setupAutoScroll } from "./log-panel-helpers.js";
+import { downloadLog, autoScrollObserver } from "./log-panel-helpers.js";
 
 let elements, logger, connection;
 let rttClient = null;
 let ansiRenderer = null;
-let autoScrollFn = null;
 
 function parseHexInput(s) {
   const t = s.trim();
@@ -18,6 +17,7 @@ export function init(els, log, conn) {
   elements = els;
   logger = log;
   connection = conn;
+  autoScrollObserver(elements.rttLogEl, elements.chkRttAutoScroll);
 }
 
 export async function runRttSearch() {
@@ -60,8 +60,6 @@ export function runRttStart() {
   if (!rttClient) return;
   const intervalMs = parseInt(elements.rttIntervalInput.value, 10) || 50;
   ansiRenderer = new AnsiRenderer();
-  ansiRenderer.autoScroll = elements.chkRttAutoScroll.checked;
-  autoScrollFn = setupAutoScroll(elements.rttLogEl, elements.chkRttAutoScroll);
   rttClient.removeAllListeners()
     .on("data", ({ channel, data }) => {
       const text = new TextDecoder().decode(data);

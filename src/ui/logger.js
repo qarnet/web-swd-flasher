@@ -1,4 +1,4 @@
-import { downloadLog } from "./log-panel-helpers.js";
+import { downloadLog, autoScrollObserver } from "./log-panel-helpers.js";
 
 let statusEl, logEl, statusLed, topbarTarget;
 let verbose = false;
@@ -9,32 +9,25 @@ export function init(elements) {
   logEl = elements.logEl;
   statusLed = elements.statusLed;
   topbarTarget = elements.topbarTarget;
+  if (logEl && elements.chkVerbose) {
+    autoScrollObserver(logEl, elements.chkVerbose);
+  }
 }
 
 export function log(message, isVerbose = false) {
   const line = `[${new Date().toISOString()}] ${message}`;
-  if (isVerbose) {
-    verboseLogLines.push(line);
-    if (verbose) {
-      logEl.textContent += `${line}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-  } else {
-    logEl.textContent += `${line}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-    if (!verbose) {
-      verboseLogLines.push(line);
-    }
-  }
+  verboseLogLines.push(line);
+  if (isVerbose && !verbose) return;
+  logEl.textContent += `${line}\n`;
 }
 
 export function setVerbose(v) {
   verbose = !!v;
   if (verbose) {
-    const currentLines = verboseLogLines.filter(l => !logEl.textContent.includes(l));
-    if (currentLines.length > 0) {
-      logEl.textContent += currentLines.map(l => l).join("\n") + "\n";
-      logEl.scrollTop = logEl.scrollHeight;
+    const visible = logEl.textContent;
+    const missing = verboseLogLines.filter(l => !visible.includes(l));
+    if (missing.length > 0) {
+      logEl.textContent += missing.join("\n") + "\n";
     }
   }
 }

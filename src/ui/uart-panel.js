@@ -1,22 +1,20 @@
 import { normalizeError } from "../core/errors.js";
-import { downloadLog, setupAutoScroll } from "./log-panel-helpers.js";
+import { downloadLog, autoScrollObserver } from "./log-panel-helpers.js";
 
 let elements, logger, connection;
 let uartOpen = false;
 let uartLogText = "";
-let autoScrollFn = null;
 
 function uartLog(text) {
   uartLogText += text;
   elements.uartLogEl.textContent += text;
-  if (autoScrollFn) autoScrollFn();
 }
 
 export function init(els, log, conn) {
   elements = els;
   logger = log;
   connection = conn;
-  autoScrollFn = setupAutoScroll(elements.uartLogEl, elements.chkUartAutoScroll);
+  autoScrollObserver(elements.uartLogEl, elements.chkUartAutoScroll);
 }
 
 export async function openUartSession() {

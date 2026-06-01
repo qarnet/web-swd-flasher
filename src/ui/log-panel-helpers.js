@@ -10,14 +10,12 @@ export function downloadLog(plainText, filename) {
   URL.revokeObjectURL(url);
 }
 
-export function setupAutoScroll(el, checkbox) {
-  function updateScroll() {
+export function autoScrollObserver(el, checkbox) {
+  const observer = new MutationObserver(() => {
     if (checkbox.checked) {
       el.scrollTop = el.scrollHeight;
     }
-  }
-  checkbox.addEventListener("change", () => {
-    if (checkbox.checked) updateScroll();
   });
-  return updateScroll;
+  observer.observe(el, { childList: true, characterData: true, subtree: true });
+  return observer;
 }
