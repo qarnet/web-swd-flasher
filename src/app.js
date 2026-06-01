@@ -363,7 +363,7 @@ async function init() {
   if (buildTimeEl && BUILD_TIMESTAMP !== "__BUILD_TIMESTAMP__") {
     const ts = BUILD_TIMESTAMP.endsWith("Z") ? BUILD_TIMESTAMP : BUILD_TIMESTAMP + "Z";
     const d = new Date(ts);
-    buildTimeEl.textContent = `[Built: ${isNaN(d) ? BUILD_TIMESTAMP : d.toLocaleString()}]`;
+    buildTimeEl.textContent = `Build ${isNaN(d) ? BUILD_TIMESTAMP : d.toLocaleString()}`;
   }
   logger.setStatus("Ready");
 }
