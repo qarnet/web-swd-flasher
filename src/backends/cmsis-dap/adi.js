@@ -10,7 +10,12 @@ export class AdiSession {
 
   async reconnectSwd() {
     await this.dapCore.reconnectSwd();
-    this.apSelect = 0;
+    // Invalidate apSelect so the next selectAp always writes DP SELECT on the wire.
+    // Without this, after CTRL-AP access (recovery), apSelect=0 matches selectAp(0,0)
+    // and the stale DP SELECT (still pointing at CTRL-AP) is never corrected,
+    // causing all subsequent memory reads to hit the wrong AP.
+    this.apSelect = -1;
+    await this.selectAp(0, 0);
   }
 
   async readDpidr() {
