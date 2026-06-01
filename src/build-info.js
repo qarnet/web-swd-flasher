@@ -1,1 +1,1 @@
-export const BUILD_TIMESTAMP = "__BUILD_TIMESTAMP__";
+export const BUILD_TIMESTAMP = "2026-06-01T19:03:16Z";

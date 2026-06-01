@@ -32,6 +32,7 @@ function gatherElements() {
   return {
     // Topbar
     statusLed: document.getElementById("status-led"),
+    statusEl: document.getElementById("status"),
     topbarTarget: document.getElementById("topbar-target"),
     btnTheme: document.getElementById("btn-theme"),
 

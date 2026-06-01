@@ -5,6 +5,11 @@ let elements, serialManager;
 export function init(els, manager) {
   elements = els;
   serialManager = manager;
+  const savedBaud = localStorage.getItem("serial-baud");
+  if (savedBaud !== null) elements.serialBaudSelect.value = savedBaud;
+  elements.serialBaudSelect.addEventListener("change", () => {
+    localStorage.setItem("serial-baud", elements.serialBaudSelect.value);
+  });
 }
 
 export function checkCompatibility() {
