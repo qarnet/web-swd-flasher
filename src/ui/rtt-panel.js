@@ -1,8 +1,10 @@
 import { RttClient } from "../rtt/rtt-client.js";
 import { normalizeError } from "../core/errors.js";
+import { AnsiRenderer } from "./ansi-renderer.js";
 
 let elements, logger, connection;
 let rttClient = null;
+let ansiRenderer = null;
 
 function parseHexInput(s) {
   const t = s.trim();
@@ -11,7 +13,7 @@ function parseHexInput(s) {
 }
 
 function rttLog(msg) {
-  elements.rttLogEl.textContent += msg;
+  ansiRenderer.write(elements.rttLogEl, msg);
   elements.rttLogEl.scrollTop = elements.rttLogEl.scrollHeight;
 }
 
@@ -36,6 +38,7 @@ export async function runRttSearch() {
   elements.btnRttStart.disabled = true;
 
   rttClient = new RttClient(backend.adi);
+  ansiRenderer = new AnsiRenderer();
   try {
     const found = await rttClient.search(ramStart, ramSize);
     if (found) {
