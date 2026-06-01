@@ -47,6 +47,13 @@ export class RttClient {
     return this;
   }
 
+  removeAllListeners() {
+    for (const key of Object.keys(this._handlers)) {
+      this._handlers[key] = [];
+    }
+    return this;
+  }
+
   _emit(event, data) {
     for (const h of this._handlers[event] ?? []) {
       try { h(data); } catch { /* ignore handler errors */ }
@@ -161,7 +168,6 @@ export class RttClient {
 
     for (let ch = 0; ch < upCount; ch++) {
       const chanDescAddr = cbAddr + CB_HEADER_SIZE + ch * CHAN_DESC_SIZE;
-      // Read WrOff and RdOff — the two fields we need to poll
       const ptrWords = await this.adi.readMemBlockFast(chanDescAddr + CHAN_WROFF, 2);
       const wrOff = ptrWords[0];
       const rdOff = ptrWords[1];
@@ -171,24 +177,17 @@ export class RttClient {
 
       let data;
       if (wrOff > rdOff) {
-        const byteCount = wrOff - rdOff;
-        const wordCount = Math.ceil(byteCount / 4);
-        const words = await this.adi.readMemBlockFast(pBuffer + rdOff, wordCount);
-        data = new Uint8Array(words.buffer).slice(0, byteCount);
+        data = await this._readRingBytes(pBuffer, size, rdOff, wrOff - rdOff);
       } else {
-        // Wrap-around: two segments
         const part1Len = size - rdOff;
         const part2Len = wrOff;
-        const w1 = await this.adi.readMemBlockFast(pBuffer + rdOff, Math.ceil(part1Len / 4));
-        const w2 = wrOff > 0 ? await this.adi.readMemBlockFast(pBuffer, Math.ceil(part2Len / 4)) : new Uint32Array(0);
-        const b1 = new Uint8Array(w1.buffer).slice(0, part1Len);
-        const b2 = new Uint8Array(w2.buffer).slice(0, part2Len);
+        const b1 = await this._readRingBytes(pBuffer, size, rdOff, part1Len);
+        const b2 = part2Len > 0 ? await this._readRingBytes(pBuffer, size, 0, part2Len) : new Uint8Array(0);
         data = new Uint8Array(b1.length + b2.length);
         data.set(b1, 0);
         data.set(b2, b1.length);
       }
 
-      // Advance host read pointer
       const newRdOff = wrOff;
       await this.adi.writeMem32(chanDescAddr + CHAN_RDOFF, newRdOff);
       this._upChannels[ch].wrOff = wrOff;
@@ -196,6 +195,16 @@ export class RttClient {
 
       this._emit("data", { channel: ch, data });
     }
+  }
+
+  async _readRingBytes(pBuffer, ringSize, offset, byteCount) {
+    const alignAddr = (pBuffer + offset) & ~3;
+    const byteOffset = (pBuffer + offset) - alignAddr;
+    const totalBytes = byteOffset + byteCount;
+    const wordCount = Math.ceil(totalBytes / 4);
+    const words = await this.adi.readMemBlockFast(alignAddr, wordCount);
+    const view = new Uint8Array(words.buffer, words.byteOffset, words.byteLength);
+    return view.slice(byteOffset, byteOffset + byteCount);
   }
 
   stop() {

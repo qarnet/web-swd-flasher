@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Web SWD Flasher</title>
+    <script>!function(){var t=localStorage.getItem("theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}();</script>
     <link rel="stylesheet" href="styles/base.css" />
   </head>
   <body>
@@ -11,9 +12,18 @@
       <span class="led" id="status-led"></span>
       <h1>Web SWD Flasher</h1>
       <span id="topbar-target">Not connected</span>
+      <span id="topbar-build-time" style="margin-left:auto;font-size:0.75rem;color:var(--muted);"></span>
       <button class="btn-icon" id="btn-theme" type="button" title="Toggle dark mode">🌙</button>
     </div>
-    <main class="app">
+
+    <!-- Top-level section switcher -->
+    <nav class="mode-bar" role="tablist">
+      <button class="mode-btn active" role="tab" data-mode="swd">SWD Programmer</button>
+      <button class="mode-btn" role="tab" data-mode="serial">Serial Terminal</button>
+    </nav>
+
+    <!-- ========== SWD Programmer Section ========== -->
+    <main class="app" id="section-swd">
 
       <section id="compat-banner" class="banner" hidden>
         <strong>WebUSB unavailable:</strong>
@@ -28,7 +38,6 @@
         <button class="tab-btn" role="tab" data-tab="memory">Memory Read</button>
         <button class="tab-btn" role="tab" data-tab="uicr">UICR</button>
         <button class="tab-btn" role="tab" data-tab="rtt">RTT</button>
-        <button class="tab-btn" role="tab" data-tab="uart">UART Pass-through</button>
       </nav>
 
       <!-- Connection -->
@@ -180,6 +189,8 @@
           <button id="btn-rtt-start" type="button" disabled>Start Polling</button>
           <button id="btn-rtt-stop" type="button" disabled>Stop</button>
           <button id="btn-rtt-clear" type="button">Clear Log</button>
+          <button id="btn-rtt-download" type="button" disabled>Download Log</button>
+          <label class="checkbox-label"><input id="chk-rtt-autoscroll" type="checkbox" checked /> Auto-scroll</label>
         </div>
         <p id="rtt-status" class="status"></p>
         <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
@@ -189,13 +200,32 @@
         </div>
       </section>
 
-      <!-- UART Pass-through -->
-      <section id="tab-uart" class="panel tab-panel" hidden>
-        <h2>UART Passthrough</h2>
-        <p class="hint">Routes probe UART to target TX/RX via DAP_UART_* (CMSIS-DAP v2.1). Probe must report capability bit 7 (UART Port).</p>
+      <!-- SWD Event Log -->
+      <section class="panel" id="event-log-panel">
+        <h2>Event Log</h2>
+        <div class="row" style="margin-bottom:0.5rem;">
+          <button id="btn-log-clear" type="button">Clear</button>
+          <button id="btn-log-download" type="button">Download Log</button>
+          <label class="checkbox-label"><input id="chk-verbose" type="checkbox" /> Verbose (show TX/RX)</label>
+        </div>
+        <pre id="log" class="log log-collapsed"></pre>
+      </section>
+    </main>
+
+    <!-- ========== Serial Terminal Section ========== -->
+    <main class="app" id="section-serial" hidden>
+
+      <section id="serial-compat-banner" class="banner" hidden>
+        <strong>Web Serial unavailable:</strong>
+        <span id="serial-compat-msg"></span>
+      </section>
+
+      <!-- Serial Connection -->
+      <section class="panel" id="serial-connection-panel">
+        <h2>Serial Connection</h2>
         <div class="row">
-          <label for="uart-baud-select">Baud</label>
-          <select id="uart-baud-select">
+          <label for="serial-baud-select">Baud</label>
+          <select id="serial-baud-select">
             <option value="9600">9600</option>
             <option value="19200">19200</option>
             <option value="38400">38400</option>
@@ -205,37 +235,35 @@
             <option value="460800">460800</option>
             <option value="921600">921600</option>
           </select>
-          <button id="btn-uart-open" type="button" disabled>Open</button>
-          <button id="btn-uart-close" type="button" disabled>Close</button>
-          <button id="btn-uart-clear" type="button">Clear</button>
+          <button id="btn-serial-connect" type="button">Connect Serial Port</button>
+          <button id="btn-serial-disconnect" type="button" disabled>Disconnect</button>
         </div>
-        <p id="uart-status" class="status"></p>
-        <pre id="uart-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
-        <div class="row" style="margin-top:0.5rem;">
-          <input id="uart-tx-input" type="text" placeholder="Send string…" style="flex:1;" disabled />
-          <button id="btn-uart-send" type="button" disabled>Send</button>
-        </div>
-
-        <!-- SWO shown here when probe supports it -->
-        <section id="swo-panel" hidden style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-          <h2>SWO / ITM Trace</h2>
-          <p class="hint">Serial Wire Output trace via DAP_SWO_* (CMSIS-DAP v1.3). Probe must report capability bit 2 (SWO UART) or bit 3 (SWO Manchester).</p>
-          <div class="row">
-            <label for="swo-baud-input">Baud rate</label>
-            <input id="swo-baud-input" type="text" value="1000000" style="width:9rem;" />
-            <button id="btn-swo-open" type="button" disabled>Open</button>
-            <button id="btn-swo-close" type="button" disabled>Close</button>
-            <button id="btn-swo-clear" type="button">Clear</button>
-          </div>
-          <p id="swo-status" class="status"></p>
-          <pre id="swo-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
-        </section>
+        <p id="serial-status" class="status">Not connected</p>
       </section>
 
-      <!-- Event Log — always visible -->
-      <section class="panel" id="event-log-panel">
+      <!-- Serial Terminal -->
+      <section class="panel" id="serial-terminal-panel">
+        <h2>Terminal</h2>
+        <div class="row">
+          <button id="btn-serial-clear" type="button">Clear Log</button>
+          <button id="btn-serial-download" type="button">Download Log</button>
+          <label class="checkbox-label"><input id="chk-serial-autoscroll" type="checkbox" checked /> Auto-scroll</label>
+        </div>
+        <pre id="serial-term-log" class="log" style="min-height:300px;max-height:500px;overflow:auto;font-size:0.8rem;"></pre>
+        <div class="row" style="margin-top:0.5rem;">
+          <input id="serial-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
+          <button id="btn-serial-send" type="button">Send</button>
+        </div>
+      </section>
+
+      <!-- Serial Event Log -->
+      <section class="panel" id="serial-event-log-panel">
         <h2>Event Log</h2>
-        <pre id="log" class="log log-collapsed"></pre>
+        <div class="row" style="margin-bottom:0.5rem;">
+          <button id="btn-serial-log-clear" type="button">Clear</button>
+          <button id="btn-serial-log-download" type="button">Download Log</button>
+        </div>
+        <pre id="serial-log" class="log log-collapsed"></pre>
       </section>
     </main>
 

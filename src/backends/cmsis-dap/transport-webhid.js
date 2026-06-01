@@ -49,7 +49,7 @@ export class CmsisDapWebHidTransport {
 
   debug(message, payload = null) {
     if (this.log) {
-      this.log(`[cmsis-dap-webhid] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`);
+      this.log(`[cmsis-dap-webhid] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`, true);
     }
   }
 

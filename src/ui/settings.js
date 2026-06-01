@@ -1,5 +1,5 @@
 export function init(elements) {
-  const { btnTheme, clockSelect, uartBaudSelect, rttRamStartInput, rttRamSizeInput, rttIntervalInput, memAddrInput, memLenInput } = elements;
+  const { btnTheme, clockSelect, rttRamStartInput, rttRamSizeInput, rttIntervalInput, memAddrInput, memLenInput } = elements;
 
   // Theme
   const saved = localStorage.getItem("theme") || "light";
@@ -14,7 +14,6 @@ export function init(elements) {
   // Settings persistence
   const PERSIST = [
     { el: clockSelect,       key: "swd-clock-hz",  event: "change" },
-    { el: uartBaudSelect,    key: "uart-baud",      event: "change" },
     { el: rttRamStartInput,  key: "rtt-ram-start",  event: "change" },
     { el: rttRamSizeInput,   key: "rtt-ram-size",   event: "change" },
     { el: rttIntervalInput,  key: "rtt-interval",   event: "change" },

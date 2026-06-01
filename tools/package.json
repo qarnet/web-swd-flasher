@@ -6,7 +6,10 @@
     "browser-smoke": "node browser-smoke.mjs",
     "browser-tests": "node browser-tests.mjs",
     "test": "node --test tests/*.test.mjs",
-    "hardware-test": "node hardware-test.mjs"
+    "hitl": "node --test tests/hitl/*.test.mjs",
+    "hitl-flash": "node --test tests/hitl/*.test.mjs --flash-test",
+    "hitl-recovery": "node --test tests/hitl/*.test.mjs --recovery-test",
+    "hitl-all": "node --test tests/hitl/*.test.mjs --flash-test --recovery-test"
   },
   "dependencies": {
     "puppeteer": "^25.0.4",

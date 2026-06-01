@@ -11,7 +11,7 @@ export class JLinkWebUsbTransport {
 
   debug(message, payload = null) {
     if (this.log) {
-      this.log(`[jlink-webusb] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`);
+      this.log(`[jlink-webusb] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`, true);
     }
   }
 
