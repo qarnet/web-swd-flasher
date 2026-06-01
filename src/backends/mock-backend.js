@@ -111,7 +111,17 @@ export class MockBackend extends ProbeBackend {
   }
 
   getCortex() {
-    return null;
+    return {
+      halt: async () => {},
+      resume: async () => {},
+      step: async () => {},
+      readCoreRegs: async () => ({
+        sp: 0x20001000, r0: 0, r1: 1, r2: 2, r3: 3,
+        r4: 4, r5: 5, r6: 6, r7: 7, r8: 8, r9: 9,
+        r10: 10, r11: 11, r12: 12, lr: 0x1000, pc: 0x2000, xpsr: 0x01000000,
+      }),
+      isHalted: async () => true,
+    };
   }
 
   getRecovery() {

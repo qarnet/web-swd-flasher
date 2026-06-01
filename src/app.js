@@ -148,8 +148,8 @@ async function init() {
 
   bus.on(Topics.IMAGE_CHANGED, (payload) => refreshVisualizer(payload));
   bus.on(Topics.READ_REGIONS_CHANGED, () => refreshVisualizer());
-  bus.on(Topics.BACKEND_CONNECTED, () => refreshVisualizer());
-  bus.on(Topics.BACKEND_DISCONNECTED, () => refreshVisualizer());
+  bus.on(Topics.BACKEND_CONNECTED, ({ backend: b }) => { backend = b; refreshVisualizer(); });
+  bus.on(Topics.BACKEND_DISCONNECTED, () => { backend = null; refreshVisualizer(); });
 
   function setFlashProgress(percent, label) {
     if (percent === null) {
