@@ -31,7 +31,7 @@ test("target: FICR CODEPAGESIZE is 4096", skipIfNoProbe(), async () => {
 test("target: FICR part number looks like nRF52", skipIfNoProbe(), async () => {
   const part = await getAdi().readMem32(FICR_PART);
   assert.ok(
-    (part >>> 16) === 0x0052,
+    (part >>> 16) === 0x0005,
     `Expected nRF52xxx, FICR_PART=0x${part.toString(16)}`
   );
   console.log(`  Part: nRF${part.toString(16).toUpperCase()}`);

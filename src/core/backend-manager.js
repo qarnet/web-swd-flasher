@@ -1,8 +1,8 @@
-import { CmsisDapBackend } from "../backends/cmsis-dap/backend.js";
+import { createBackend } from "../backends/backend-registry.js";
 
 export class BackendManager {
-  constructor(progressBus, logger = null) {
-    this.progressBus = progressBus;
+  constructor(bus, logger = null) {
+    this.bus = bus;
     this.logger = logger;
     this.current = null;
     this.swdClockHz = 1000000;
@@ -13,7 +13,11 @@ export class BackendManager {
   }
 
   setBackend(name) {
-    this.current = new CmsisDapBackend(this.progressBus, this.logger, this.swdClockHz);
+    this.current = createBackend(name, {
+      bus: this.bus,
+      logger: this.logger,
+      swdClockHz: this.swdClockHz,
+    });
     return this.current;
   }
 

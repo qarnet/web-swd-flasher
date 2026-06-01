@@ -2,20 +2,6 @@ const BAR_H = 32;
 const SVG_H = BAR_H + 24;
 const W = 1000;
 
-// Named sub-regions for known targets
-const NAMED_REGIONS = {
-  nrf52840: [
-    { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" },
-    { label: "BL", start: 0x001000, end: 0x025fff, color: "#9ca3af" }
-  ],
-  nrf52832: [
-    { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" }
-  ],
-  nrf52833: [
-    { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" }
-  ]
-};
-
 function a2x(addr, flashStart, flashSize) {
   return Math.max(0, Math.min(W, ((addr - flashStart) / flashSize) * W));
 }
@@ -34,8 +20,9 @@ export function renderFlashVisualizer(container, {
   flashStart = 0,
   flashSize = 1024 * 1024,
   targetId = null,
-  files = [],       // [{name, segments, color}]
-  readRegions = []  // [{start, size, ok}]
+  namedRegions = [],
+  files = [],
+  readRegions = []
 } = {}) {
   const ax = (a) => a2x(a, flashStart, flashSize);
   const parts = [];
@@ -43,9 +30,8 @@ export function renderFlashVisualizer(container, {
   // Background bar
   parts.push(`<rect x="0" y="0" width="${W}" height="${BAR_H}" fill="#e5e7eb" rx="4"/>`);
 
-  // Named regions
-  const named = NAMED_REGIONS[targetId] ?? [];
-  for (const r of named) {
+  // Named regions from target descriptor
+  for (const r of namedRegions) {
     const x1 = ax(r.start);
     const x2 = ax(r.end + 1);
     parts.push(rect(x1, x2, 0, BAR_H, r.color, `${r.label}: ${fmtAddr(r.start)}-${fmtAddr(r.end)}`));
@@ -79,8 +65,8 @@ export function renderFlashVisualizer(container, {
     { addr: flashStart, label: fmtAddr(flashStart), anchor: "start" },
     { addr: flashStart + flashSize - 1, label: fmtAddr(flashStart + flashSize), anchor: "end" }
   ];
-  if (named.length > 0) {
-    const appStart = named[named.length - 1].end + 1;
+  if (namedRegions.length > 0) {
+    const appStart = namedRegions[namedRegions.length - 1].end + 1;
     ticks.push({ addr: appStart, label: fmtAddr(appStart), anchor: "middle" });
   }
 

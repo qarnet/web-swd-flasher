@@ -47,6 +47,8 @@
           <label for="backend-select">Backend</label>
           <select id="backend-select">
             <option value="cmsis-dap" selected>CMSIS-DAP</option>
+            <option value="mock">Mock (simulated)</option>
+            <option value="jlink-webusb" hidden>J-Link WebUSB</option>
           </select>
           <label for="clock-select">SWD Clock</label>
           <select id="clock-select">
@@ -268,5 +270,13 @@
     </main>
 
     <script type="module" src="src/app.js"></script>
+    <script>
+      // Show dev-only options when ?dev=1
+      if (new URLSearchParams(location.search).has("dev")) {
+        document.querySelectorAll("[hidden]").forEach(el => {
+          if (el.tagName === "OPTION" && el.value === "jlink-webusb") el.hidden = false;
+        });
+      }
+    </script>
   </body>
 </html>

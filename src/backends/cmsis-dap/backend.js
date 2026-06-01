@@ -2,20 +2,24 @@ import { ProbeBackend } from "../backend-interface.js";
 import { CmsisDapWebUsbTransport } from "./transport-webusb.js";
 import { CmsisDapCore } from "./dap-core.js";
 import { AdiSession } from "./adi.js";
-import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
 import { Nrf52Recovery } from "./nrf52-recovery.js";
 import { DapCortex } from "./dap-cortex.js";
+import { RttClient } from "../../rtt/rtt-client.js";
 import { TARGETS, detectTarget } from "../../targets/target-registry.js";
+import { createFlashProgrammer } from "../../targets/flash-programmer-registry.js";
+import { AIRCR, AIRCR_VECTKEY_SYSRESETREQ } from "../../arch/cortex-m.js";
+import { Topics } from "../../core/event-bus-topics.js";
 
 export class CmsisDapBackend extends ProbeBackend {
-  constructor(progressBus, logger = null, swdClockHz = 1000000) {
+  constructor(bus, logger = null, swdClockHz = 1000000) {
     super();
     this.transport = new CmsisDapWebUsbTransport(logger);
     this.core = new CmsisDapCore(this.transport, swdClockHz);
-    this.adi = new AdiSession(this.core);
-    this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
-    this.recovery = new Nrf52Recovery(this.adi);
-    this.cortex = new DapCortex(this.adi);
+    this._adi = new AdiSession(this.core);
+    this._flash = null;
+    this._recovery = new Nrf52Recovery(this._adi);
+    this._cortex = new DapCortex(this._adi);
+    this._bus = bus;
     this._detectedTarget = null;
     this._ficr = null;
     this._targetOverride = null;
@@ -39,6 +43,31 @@ export class CmsisDapBackend extends ProbeBackend {
     this._targetOverride = found;
   }
 
+  getMemoryAccess() {
+    return {
+      readMem32: (addr) => this._adi.readMem32(addr),
+      writeMem32: (addr, val) => this._adi.writeMem32(addr, val),
+      readBlockFast: (addr, wordCount) => this._adi.readMemBlockFast(addr, wordCount),
+      maxReadBlockWordCount: this._adi.maxReadBlockWordCount,
+    };
+  }
+
+  createRttSession() {
+    return new RttClient(this._adi);
+  }
+
+  getCortex() {
+    return this._cortex;
+  }
+
+  getRecovery() {
+    return this._recovery;
+  }
+
+  async withQuietLog(fn) {
+    return this.transport.withQuiet(fn);
+  }
+
   async requestDevice() {
     return this.transport.requestDevice();
   }
@@ -48,11 +77,14 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async connect() {
+    this._bus.emit(Topics.BACKEND_PROGRESS, { percent: 50 });
     await this.core.connect();
-    await this.adi.connectSwd();
-    const { target, ficr } = await detectTarget(this.adi);
+    await this._adi.connectSwd();
+    const { target, ficr } = await detectTarget(this._adi);
     this._detectedTarget = target;
     this._ficr = ficr;
+    this._flash = createFlashProgrammer(this.activeTarget, { adi: this._adi, bus: this._bus });
+    this._bus.emit(Topics.BACKEND_PROGRESS, { percent: 100 });
   }
 
   async disconnect() {
@@ -82,16 +114,16 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async checkProtection() {
-    return this.recovery.checkProtection();
+    return this._recovery.checkProtection();
   }
 
   async recoverDevice(onProgress = null) {
-    return this.recovery.eraseAll(onProgress);
+    return this._recovery.eraseAll(onProgress);
   }
 
   async getTargetInfo() {
     const tgt = this.activeTarget;
-    const dpidr = await this.adi.readDpidr();
+    const dpidr = await this._adi.readDpidr();
     return {
       family: tgt.family,
       part: tgt.label,
@@ -106,20 +138,20 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async readMemory(addr, len) {
-    return this.adi.readMemBlock(addr, len);
+    return this._adi.readMemBlock(addr, len);
   }
 
   async programImage(image, options) {
-    return this.flash.programImage(image, options);
+    return this._flash.programImage(image, options);
   }
 
   async verifyImage(image, options) {
-    return this.flash.verifyImage(image, options);
+    return this._flash.verifyImage(image, options);
   }
 
   async reset(mode = "run") {
     if (mode === "run") {
-      await this.adi.writeMem32(0xe000ed0c, 0x05fa0004);
+      await this._adi.writeMem32(AIRCR, AIRCR_VECTKEY_SYSRESETREQ);
       return { mode: "run", method: "sysresetreq" };
     }
     return { mode };
@@ -129,11 +161,11 @@ export class CmsisDapBackend extends ProbeBackend {
     return this.core.selectSwdTarget(targetSel);
   }
 
-  async haltCore() { return this.cortex.halt(); }
-  async resumeCore() { return this.cortex.resume(); }
-  async stepCore() { return this.cortex.step(); }
-  async readCoreRegs() { return this.cortex.readCoreRegs(); }
-  async isCoreHalted() { return this.cortex.isHalted(); }
+  async haltCore() { return this._cortex.halt(); }
+  async resumeCore() { return this._cortex.resume(); }
+  async stepCore() { return this._cortex.step(); }
+  async readCoreRegs() { return this._cortex.readCoreRegs(); }
+  async isCoreHalted() { return this._cortex.isHalted(); }
 
   capabilities() {
     return {
@@ -146,7 +178,7 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async diagRawRead32(addr) {
-    const adi = this.adi;
+    const adi = this._adi;
     const core = this.core;
     const results = {};
     results.step1_selectAp = await (async () => {

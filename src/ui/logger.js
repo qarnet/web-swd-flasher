@@ -1,5 +1,7 @@
 import { downloadLog, autoScrollObserver } from "./log-panel-helpers.js";
 
+const MAX_LINES = 5000;
+
 let statusEl, logEl, statusLed, topbarTarget;
 let verbose = false;
 let verboseLogLines = [];
@@ -14,17 +16,23 @@ export function init(elements) {
   }
 }
 
+function trimBuffer(arr) {
+  while (arr.length > MAX_LINES) arr.shift();
+}
+
 export function log(message) {
   const line = `[${new Date().toISOString()}] ${message}`;
   verboseLogLines.push(line);
-  logEl.textContent += `${line}\n`;
+  trimBuffer(verboseLogLines);
+  logEl.textContent = verboseLogLines.join("\n") + "\n";
 }
 
 export function logVerbose(message) {
   if (!verbose) return;
   const line = `[${new Date().toISOString()}] ${message}`;
   verboseLogLines.push(line);
-  logEl.textContent += `${line}\n`;
+  trimBuffer(verboseLogLines);
+  logEl.textContent = verboseLogLines.join("\n") + "\n";
 }
 
 export function setVerbose(v) {

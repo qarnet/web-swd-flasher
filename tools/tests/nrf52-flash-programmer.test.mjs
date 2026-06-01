@@ -135,8 +135,8 @@ test("progress events throttled to every 1024 words during write", async () => {
   const adi = new FakeAdi();
   const events = [];
   const bus = {
-    emit(e) {
-      if (e.type === "program" && e.message && e.message.startsWith("Programmed")) {
+    emit(topic, e) {
+      if (topic && e.kind === "program" && e.message && e.message.startsWith("Programmed")) {
         events.push(e);
       }
     }
@@ -151,8 +151,8 @@ test("final 100 percent event always emitted for small images", async () => {
   const adi = new FakeAdi();
   const programEvents = [];
   const bus = {
-    emit(e) {
-      if (e.type === "program") programEvents.push(e);
+    emit(topic, e) {
+      if (topic && e.kind === "program") programEvents.push(e);
     }
   };
   const flasher = new Nrf52FlashProgrammer(bus, adi);

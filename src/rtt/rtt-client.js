@@ -239,4 +239,12 @@ export class RttClient {
   get controlBlockAddr() {
     return this._cbAddr;
   }
+
+  get upChannelCount() {
+    return this._upChannels.length;
+  }
+
+  get downChannelCount() {
+    return this._downChannels.length;
+  }
 }

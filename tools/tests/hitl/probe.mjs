@@ -8,6 +8,7 @@ import { DapUartSession } from "../../../src/backends/cmsis-dap/dap-uart.js";
 import { TARGETS, detectTarget } from "../../../src/targets/target-registry.js";
 import { parseIntelHexFileText } from "../../../src/hex/intel-hex-parser.js";
 import { buildImageMap } from "../../../src/hex/image-map.js";
+import { EventBus } from "../../../src/core/event-bus.js";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,7 +41,7 @@ export async function ensureConnected() {
 }
 
 export function makeFlasher() {
-  const bus = { emit() {} };
+  const bus = new EventBus();
   return new Nrf52FlashProgrammer(bus, adi);
 }
 

@@ -12,8 +12,11 @@
     "hitl-all": "node --test tests/hitl/*.test.mjs --flash-test --recovery-test"
   },
   "dependencies": {
+    "node-hid": "^3.3.0",
     "puppeteer": "^25.0.4",
-    "usb": "^2.17.0",
-    "node-hid": "^3.3.0"
+    "usb": "^2.17.0"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.12"
   }
 }

@@ -15,7 +15,11 @@ export const TARGETS = [
     uicr: { start: 0x10001000, size: 4096 },
     defaultAppStart: 0x00026000,
     programmer: "nvmc-nrf52",
-    hasCtrlAp: true
+    hasCtrlAp: true,
+    namedRegions: [
+      { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" },
+      { label: "BL", start: 0x001000, end: 0x025fff, color: "#9ca3af" }
+    ]
   },
   {
     id: "nrf52833",
@@ -27,7 +31,10 @@ export const TARGETS = [
     uicr: { start: 0x10001000, size: 4096 },
     defaultAppStart: 0x00001000,
     programmer: "nvmc-nrf52",
-    hasCtrlAp: true
+    hasCtrlAp: true,
+    namedRegions: [
+      { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" }
+    ]
   },
   {
     id: "nrf52832",
@@ -39,7 +46,10 @@ export const TARGETS = [
     uicr: { start: 0x10001000, size: 4096 },
     defaultAppStart: 0x00001000,
     programmer: "nvmc-nrf52",
-    hasCtrlAp: true
+    hasCtrlAp: true,
+    namedRegions: [
+      { label: "MBR", start: 0x000000, end: 0x000fff, color: "#6b7280" }
+    ]
   },
   {
     id: "nrf5340-app",
