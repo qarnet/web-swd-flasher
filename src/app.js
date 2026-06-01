@@ -2,6 +2,7 @@ import { BackendManager } from "./core/backend-manager.js";
 import { ProgressBus } from "./core/progress.js";
 import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
 import { buildImageMap } from "./hex/image-map.js";
+import { BUILD_TIMESTAMP } from "./build-info.js";
 
 // UI Modules
 import * as logger from "./ui/logger.js";
@@ -327,6 +328,10 @@ async function init() {
   connection.checkCompatibility();
   flashOps.updateOperationButtons();
   refreshVisualizer();
+  const buildTimeEl = document.getElementById("topbar-build-time");
+  if (buildTimeEl && BUILD_TIMESTAMP !== "__BUILD_TIMESTAMP__") {
+    buildTimeEl.textContent = BUILD_TIMESTAMP;
+  }
   logger.setStatus("Ready");
 }
 
