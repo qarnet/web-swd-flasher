@@ -5,9 +5,12 @@
   "scripts": {
     "browser-smoke": "node browser-smoke.mjs",
     "browser-tests": "node browser-tests.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "hardware-test": "node hardware-test.mjs"
   },
   "dependencies": {
-    "puppeteer": "^25.0.4"
+    "puppeteer": "^25.0.4",
+    "usb": "^2.17.0",
+    "node-hid": "^3.3.0"
   }
 }
