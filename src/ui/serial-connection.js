@@ -1,4 +1,5 @@
 import * as serialLogger from "./serial-logger.js";
+import * as serialTerminal from "./serial-terminal.js";
 
 let elements, serialManager;
 
@@ -34,6 +35,7 @@ export async function connectSerial() {
     elements.serialStatusEl.textContent = `Selected: VID 0x${(info.usbVendorId ?? 0).toString(16)} PID 0x${(info.usbProductId ?? 0).toString(16)}`;
     const baudRate = parseInt(elements.serialBaudSelect.value, 10) || 115200;
     await serialManager.connect({ baudRate });
+    serialTerminal.resetFirstChunk();
     elements.serialStatusEl.textContent = `Connected at ${baudRate} baud`;
     elements.btnSerialConnect.disabled = true;
     elements.btnSerialDisconnect.disabled = false;

@@ -4,15 +4,21 @@ import * as serialLogger from "./serial-logger.js";
 
 let elements, serialManager;
 let ansiRenderer = null;
+let firstChunk = true;
 
 export function init(els, manager) {
   elements = els;
   serialManager = manager;
   ansiRenderer = new AnsiRenderer();
+  firstChunk = true;
   autoScrollObserver(elements.serialTermLogEl, elements.chkSerialAutoScroll);
 
   serialManager.onData = (bytes) => {
     const text = new TextDecoder().decode(bytes);
+    if (firstChunk) {
+      firstChunk = false;
+      ansiRenderer.write(elements.serialTermLogEl, "\n");
+    }
     ansiRenderer.write(elements.serialTermLogEl, text);
   };
 
@@ -34,6 +40,11 @@ export function sendSerialData() {
 export function clearSerialLog() {
   elements.serialTermLogEl.textContent = "";
   ansiRenderer.reset();
+  firstChunk = true;
+}
+
+export function resetFirstChunk() {
+  firstChunk = true;
 }
 
 export function downloadSerialLog() {
