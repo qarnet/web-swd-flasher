@@ -14,22 +14,21 @@ export function init(elements) {
   }
 }
 
-export function log(message, isVerbose = false) {
+export function log(message) {
   const line = `[${new Date().toISOString()}] ${message}`;
   verboseLogLines.push(line);
-  if (isVerbose && !verbose) return;
+  logEl.textContent += `${line}\n`;
+}
+
+export function logVerbose(message) {
+  if (!verbose) return;
+  const line = `[${new Date().toISOString()}] ${message}`;
+  verboseLogLines.push(line);
   logEl.textContent += `${line}\n`;
 }
 
 export function setVerbose(v) {
   verbose = !!v;
-  if (verbose) {
-    const visible = logEl.textContent;
-    const missing = verboseLogLines.filter(l => !visible.includes(l));
-    if (missing.length > 0) {
-      logEl.textContent += missing.join("\n") + "\n";
-    }
-  }
 }
 
 export function isVerbose() {

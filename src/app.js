@@ -181,7 +181,7 @@ async function init() {
   progressBus = new ProgressBus();
   backendManager = new BackendManager(
     progressBus,
-    (msg, verbose) => logger.log(msg, verbose)
+    (msg, verbose) => verbose ? logger.logVerbose(msg) : logger.log(msg)
   );
 
   // Read saved backend from localStorage
