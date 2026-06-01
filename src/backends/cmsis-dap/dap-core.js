@@ -12,8 +12,28 @@ export class CmsisDapCore {
 
   async connect() {
     await this.transport.open();
+    const result = await this._initDap();
+    try {
+      this._caps = await this.dapInfo();
+    } catch {
+      this._caps = null;
+    }
+    this.debug("connect-complete", { port: result.port, dpidr: `0x${result.dpidr.toString(16)}` });
+    return result;
+  }
+
+  // Re-initialize the DAP and SWD layer after a target reset, without
+  // reopening the USB transport. Issues DAP_Disconnect + DAP_Connect so
+  // the probe's internal SWD state machine is fully reset, then re-runs
+  // the full SWD bring-up sequence. Call this instead of reconnecting
+  // via SWJ sequences alone, which leaves the probe out of sync.
+  async reconnectSwd() {
+    await new Promise(r => setTimeout(r, 150));
+    await this._initDap();
+  }
+
+  async _initDap() {
     this.debug("connect-start");
-    // Ensure clean state: disconnect first, then connect
     try {
       await this.sendCommand(new Uint8Array([0x03]));
     } catch {
@@ -30,21 +50,19 @@ export class CmsisDapCore {
     await this.sendCommand(new Uint8Array([0x04, 0x02, 0x50, 0x00, 0x00]));
     await this.sendCommand(new Uint8Array([0x13, 0x00]));
     await this.swjSwitchToSwd();
-    // Extra line reset after switch to ensure target is in a known state
     await this.lineReset();
     const dpidr = await this.readDp(0x00);
     this.debug("dpidr-read", { dpidr: `0x${dpidr.toString(16)}` });
     await this.writeDp(0x00, 0x1e);
     await this.writeDp(0x04, 0x50000f00);
-    const ctrlStat = await this.readDp(0x04);
-    this.debug("ctrl-stat", { ctrlStat: `0x${ctrlStat.toString(16)}` });
-    // Cache probe capabilities for pipelining decisions
-    try {
-      this._caps = await this.dapInfo();
-    } catch {
-      this._caps = null;
+    // Poll until debug and system power domains acknowledge.
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline) {
+      const ctrlStat = await this.readDp(0x04);
+      this.debug("ctrl-stat", { ctrlStat: `0x${ctrlStat.toString(16)}` });
+      if ((ctrlStat & 0xa0000000) === 0xa0000000) break;
+      await new Promise(r => setTimeout(r, 5));
     }
-    this.debug("connect-complete", { port: connect[1], dpidr: `0x${dpidr.toString(16)}` });
     return { port: connect[1], dpidr };
   }
 
