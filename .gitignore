@@ -8,4 +8,4 @@ firmware/build/
 cert.pem
 key.pem
 rootCA.pem
-src/build-info.js
+

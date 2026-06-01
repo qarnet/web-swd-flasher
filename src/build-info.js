@@ -1,0 +1,1 @@
+export const BUILD_TIMESTAMP = "__BUILD_TIMESTAMP__";
