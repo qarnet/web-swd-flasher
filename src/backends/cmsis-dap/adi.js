@@ -8,6 +8,19 @@ export class AdiSession {
     return { ok: true, mode: "swd" };
   }
 
+  // Re-initialize SWD after a target reset without reopening the USB transport.
+  // Required after CTRL-AP mass erase so the DP power domains are back up.
+  async reconnectSwd() {
+    await new Promise(r => setTimeout(r, 150));
+    await this.dapCore.swjSwitchToSwd();
+    await this.dapCore.lineReset();
+    await this.dapCore.readDp(0x00);          // DPIDR — clocks target into SWD mode
+    await this.dapCore.writeDp(0x00, 0x1e);   // ABORT — clear any sticky errors
+    await this.dapCore.writeDp(0x04, 0x50000f00); // CTRL/STAT — request debug+sys power
+    await this.dapCore.readDp(0x04);          // confirm power-up accepted
+    this.apSelect = 0;                        // reset cached DP SELECT
+  }
+
   async readDpidr() {
     return this.dapCore.transfer("dp", 0x00, null);
   }

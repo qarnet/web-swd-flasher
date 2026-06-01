@@ -27,8 +27,13 @@ export class Nrf52Recovery {
       await new Promise((r) => setTimeout(r, 100));
     }
     const protStatus = await this.adi.readAp(Nrf52Recovery.REG_APPROTECTSTATUS);
+    // Assert reset, hold briefly, then deassert so the CPU actually boots.
     await this.adi.writeAp(Nrf52Recovery.REG_RESET, 1);
-    await this.adi.selectAp(0, 0);
+    await new Promise(r => setTimeout(r, 50));
+    await this.adi.writeAp(Nrf52Recovery.REG_RESET, 0);
+    // Re-initialize the SWD connection so the device is immediately
+    // reachable for programming without a replug.
+    await this.adi.reconnectSwd();
     return { unlocked: protStatus !== 0 };
   }
 }

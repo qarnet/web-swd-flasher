@@ -44,6 +44,9 @@ function gatherElements() {
     probeCapsEl: document.getElementById("probe-caps"),
     progressBar: document.getElementById("progress-bar"),
     progressFill: document.getElementById("progress-fill"),
+    flashProgressBar: document.getElementById("flash-progress-bar"),
+    flashProgressFill: document.getElementById("flash-progress-fill"),
+    flashProgressLabel: document.getElementById("flash-progress-label"),
 
     // Hex management
     fileInput: document.getElementById("file-input"),
@@ -279,9 +282,28 @@ async function init() {
   els.clockSelect.addEventListener("change", connection.onClockChanged);
 
   // Progress bus subscription
+  function setFlashProgress(percent, label) {
+    const els2 = gatherElements();
+    if (percent === null) {
+      els2.flashProgressBar.hidden = true;
+      els2.flashProgressFill.style.width = "0%";
+      els2.flashProgressLabel.hidden = true;
+    } else {
+      const pct = Math.max(0, Math.min(100, percent));
+      els2.flashProgressBar.hidden = false;
+      els2.flashProgressFill.style.width = `${pct}%`;
+      els2.flashProgressLabel.hidden = false;
+      els2.flashProgressLabel.textContent = label ? `${label} — ${pct}%` : `${pct}%`;
+    }
+  }
+
   progressBus.subscribe((event) => {
     if (event.type === "progress") {
       connection.setProgress(event.percent);
+    } else if (event.type === "program" || event.type === "verify") {
+      setFlashProgress(event.percent, event.type === "verify" ? "Verifying" : "Programming");
+      if (event.message) logger.log(event.message);
+      if (event.percent >= 100) setTimeout(() => setFlashProgress(null), 1500);
     } else if (event.type === "log") {
       logger.log(event.message);
     }
