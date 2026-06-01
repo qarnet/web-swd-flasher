@@ -9,3 +9,10 @@ firmware/
 cert.pem
 key.pem
 rootCA.pem
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
