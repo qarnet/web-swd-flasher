@@ -15,6 +15,22 @@ class FakeCore {
     }
     return 0;
   }
+
+  async transferMultiple(ops) {
+    const reads = [];
+    for (const op of ops) {
+      this.calls.push(op);
+      if (op.value === null || op.value === undefined) {
+        if (op.port === "dp" && op.register === 0x0c) {
+          // DP RDBUFF — the actual word returned from a posted AP read
+          reads.push(this.readQueue.shift() ?? 0);
+        } else {
+          reads.push(0);
+        }
+      }
+    }
+    return reads;
+  }
 }
 
 test("adi readMemBlock returns little-endian bytes", async () => {

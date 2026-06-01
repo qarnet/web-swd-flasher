@@ -1,6 +1,7 @@
 export class CmsisDapCore {
-  constructor(transport) {
+  constructor(transport, swdClockHz = 1000000) {
     this.transport = transport;
+    this.swdClockHz = swdClockHz;
   }
 
   debug(message, payload = null) {
@@ -12,22 +13,43 @@ export class CmsisDapCore {
   async connect() {
     await this.transport.open();
     this.debug("connect-start");
+    // Ensure clean state: disconnect first, then connect
+    try {
+      await this.sendCommand(new Uint8Array([0x03]));
+    } catch {
+      /* ignore disconnect errors */
+    }
     const connect = await this.sendCommand(new Uint8Array([0x02, 0x01]));
     if (connect[1] === 0) {
       throw new Error("CMSIS-DAP connect returned no active port");
     }
-    await this.sendCommand(new Uint8Array([0x11, 0xa0, 0x86, 0x01, 0x00]));
+    const clockHz = this.swdClockHz;
+    const clockBytes = [(clockHz & 0xff), ((clockHz >>> 8) & 0xff), ((clockHz >>> 16) & 0xff), ((clockHz >>> 24) & 0xff)];
+    await this.sendCommand(new Uint8Array([0x11, ...clockBytes]));
+    this.debug("swd-clock-set", { hz: clockHz });
     await this.sendCommand(new Uint8Array([0x04, 0x02, 0x50, 0x00, 0x00]));
     await this.sendCommand(new Uint8Array([0x13, 0x00]));
     await this.swjSwitchToSwd();
+    // Extra line reset after switch to ensure target is in a known state
+    await this.lineReset();
     const dpidr = await this.readDp(0x00);
     this.debug("dpidr-read", { dpidr: `0x${dpidr.toString(16)}` });
     await this.writeDp(0x00, 0x1e);
     await this.writeDp(0x04, 0x50000f00);
     const ctrlStat = await this.readDp(0x04);
     this.debug("ctrl-stat", { ctrlStat: `0x${ctrlStat.toString(16)}` });
+    // Cache probe capabilities for pipelining decisions
+    try {
+      this._caps = await this.dapInfo();
+    } catch {
+      this._caps = null;
+    }
     this.debug("connect-complete", { port: connect[1], dpidr: `0x${dpidr.toString(16)}` });
     return { port: connect[1], dpidr };
+  }
+
+  get hasAtomicCommands() {
+    return this._caps?.hasAtomicCommands ?? false;
   }
 
   async readDp(register) {
@@ -46,20 +68,64 @@ export class CmsisDapCore {
     this.debug("swj-switch-to-swd-complete");
   }
 
+  async setSWDClock(hz) {
+    this.swdClockHz = hz;
+    const b = [(hz & 0xff), ((hz >>> 8) & 0xff), ((hz >>> 16) & 0xff), ((hz >>> 24) & 0xff)];
+    await this.sendCommand(new Uint8Array([0x11, ...b]));
+  }
+
   async disconnect() {
     await this.sendCommand(new Uint8Array([0x03]));
     await this.transport.close();
   }
 
   async dapInfo() {
-    const raw = await this.sendCommand(new Uint8Array([0x00, 0x04]));
-    const caps = raw[1];
+    const query = async (id) => {
+      const raw = await this.sendCommand(new Uint8Array([0x00, id]));
+      const len = raw[1];
+      return raw.slice(2, 2 + len);
+    };
+    const dec = (bytes) => {
+      let s = "";
+      for (const b of bytes) s += String.fromCharCode(b);
+      return s;
+    };
+    const vendorBytes = await query(0x01);
+    const productBytes = await query(0x02);
+    const capsBytes = await query(0xF0);
+    const maxCntBytes = await query(0xFE);
+    const maxSzBytes = await query(0xFF);
+    const caps = capsBytes[0] ?? 0;
     return {
       protocol: "cmsis-dap",
       transport: "webusb-bulk",
+      vendor: dec(vendorBytes),
+      product: dec(productBytes),
       packetSize: this.transport.packetSize,
-      capabilities: caps
+      maxPacketCount: maxCntBytes[0] ?? 1,
+      maxPacketSize: maxSzBytes.length >= 2 ? (maxSzBytes[0] | (maxSzBytes[1] << 8)) : this.transport.packetSize,
+      capabilities: caps,
+      hasSWD: (caps & 0x01) !== 0,
+      hasJTAG: (caps & 0x02) !== 0,
+      hasSWO_UART: (caps & 0x04) !== 0,
+      hasSWO_Manchester: (caps & 0x08) !== 0,
+      hasAtomicCommands: (caps & 0x10) !== 0,
+      hasTestDomainTimer: (caps & 0x20) !== 0,
+      hasSWO_Streaming: (caps & 0x40) !== 0,
+      hasUART: (caps & 0x80) !== 0
     };
+  }
+
+  async writeAbort(value = 0x0000001e) {
+    const v = value >>> 0;
+    const payload = new Uint8Array([
+      0x08, 0x00,
+      v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff
+    ]);
+    const resp = await this.sendCommand(payload);
+    if (resp[1] !== 0x00) {
+      throw new Error(`DAP_WriteABORT failed: status=0x${resp[1].toString(16)}`);
+    }
   }
 
   async transfer(port, register, value = null) {
@@ -93,8 +159,21 @@ export class CmsisDapCore {
     }
 
     if (ack !== 0x01) {
+      const ackNames = {
+        0x00: "OK",
+        0x01: "OK",
+        0x02: "WAIT",
+        0x04: "FAULT",
+        0x07: "NO_ACK"
+      };
+      const ackName = ackNames[ack] ?? `UNKNOWN(${ack})`;
+      const hints = {
+        0x07: " — no target detected. Check that a target is connected and powered.",
+        0x04: " — debug fault. Try power-cycling the target or use recovery.",
+        0x02: " — target busy. Retry may help."
+      };
       throw new Error(
-        `CMSIS-DAP transfer failed with ACK=${ack} port=${port} register=0x${register.toString(16)} read=${read}`
+        `CMSIS-DAP transfer failed: ${ackName} port=${port} register=0x${register.toString(16)} read=${read}${hints[ack] ?? ""}`
       );
     }
 
@@ -107,16 +186,199 @@ export class CmsisDapCore {
   async sendCommand(payload) {
     this.debug("tx", { cmd: payload[0], bytes: Array.from(payload.slice(0, Math.min(12, payload.length))) });
     await this.transport.write(payload);
-    const response = await this.transport.read();
-    this.debug("rx", { cmd: response[0], bytes: Array.from(response.slice(0, Math.min(12, response.length))) });
-    if (response[0] !== payload[0]) {
-      throw new Error(`CMSIS-DAP response mismatch for command 0x${payload[0].toString(16)}`);
+    const expectedCmd = payload[0];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await this.transport.read();
+      this.debug("rx", { cmd: response[0], bytes: Array.from(response.slice(0, Math.min(12, response.length))) });
+      if (response[0] === expectedCmd) {
+        return response;
+      }
+      this.debug("stale-response", { expected: expectedCmd, got: response[0], attempt });
     }
+    throw new Error(`CMSIS-DAP response mismatch for command 0x${expectedCmd.toString(16)}`);
+  }
+
+  // DAP_ExecuteCommands (0x7F): batch multiple commands into one USB packet.
+  // cmds: array of Uint8Array payloads (same format as standalone commands).
+  // Returns: array of Uint8Array responses, one per command.
+  // Requires hasAtomicCommands capability; throws if probe doesn't support it.
+  async executeCommands(cmds) {
+    const packetSize = this.transport.packetSize;
+    let totalLen = 2; // 0x7F + num_cmds
+    for (const c of cmds) totalLen += c.length;
+    if (totalLen > packetSize) {
+      throw new Error(`executeCommands: ${totalLen}B payload exceeds packet size ${packetSize}`);
+    }
+    const payload = new Uint8Array(packetSize);
+    payload[0] = 0x7f;
+    payload[1] = cmds.length;
+    let offset = 2;
+    for (const c of cmds) {
+      payload.set(c, offset);
+      offset += c.length;
+    }
+    const response = await this.sendCommand(payload);
+    // response[0]=0x7F, response[1]=num_cmds, then concatenated sub-responses
+    // Sub-response lengths are NOT encoded — caller must know expected lengths.
+    // We return raw slices by asking the caller for expected sizes via cmdRespLengths.
+    // For simplicity: return the raw response buffer; callers slice as needed.
     return response;
+  }
+
+  // SWD multi-drop target selection (ADIv5.2 / SWDv2).
+  // targetSel: 32-bit TARGETSEL value (DLPIDR bits [31:28] | TDESIGNER bits [27:12] | TPARTNO bits [11:4] | TINSTANCE bits [3:0])
+  // Sends the dormant-to-SWD activation sequence then writes TARGETSEL.
+  // NOTE: TARGETSEL is a write-only register with no ACK phase; the DAP_Transfer
+  //       WAIT/FAULT handling is intentionally bypassed. Use after SWJ line reset.
+  async selectSwdTarget(targetSel) {
+    // Bring all targets to line-reset / dormant state
+    await this.sendCommand(new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+    // Dormant-to-SWD alert sequence (128 bits, MSB first on wire per ADIv5.2 §B5.3.4)
+    await this.sendCommand(new Uint8Array([
+      0x12, 128,
+      0x92, 0xf3, 0x09, 0x62, 0x95, 0x2d, 0x85, 0x86,
+      0xe9, 0xaf, 0xdd, 0xe3, 0xa2, 0x0e, 0xbc, 0x19
+    ]));
+    // Activation header (4 bits: 0b0001) then activation code (8 bits: 0x6A = SWD)
+    await this.sendCommand(new Uint8Array([0x12, 4, 0x1a]));
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x6a]));
+    // TARGETSEL write: DP bank 1, reg 0xC (A[3:2]=0b11), no ACK expected.
+    // Build the raw SWD packet manually via SWJ_Sequence.
+    // Packet: start(1) | APnDP(0) | RnW(0) | A[2](1) | A[3](1) | parity | stop(0) | park(1)
+    const packet = 0b10011001; // start=1, APnDP=0, RnW=0, A[2]=1, A[3]=1, parity=0, stop=0, park=1
+    const v = targetSel >>> 0;
+    const bits = (v & 1) ^ ((v >> 1) & 1) ^ ((v >> 2) & 1) ^ ((v >> 3) & 1) ^
+      ((v >> 4) & 1) ^ ((v >> 5) & 1) ^ ((v >> 6) & 1) ^ ((v >> 7) & 1) ^
+      ((v >> 8) & 1) ^ ((v >> 9) & 1) ^ ((v >> 10) & 1) ^ ((v >> 11) & 1) ^
+      ((v >> 12) & 1) ^ ((v >> 13) & 1) ^ ((v >> 14) & 1) ^ ((v >> 15) & 1) ^
+      ((v >> 16) & 1) ^ ((v >> 17) & 1) ^ ((v >> 18) & 1) ^ ((v >> 19) & 1) ^
+      ((v >> 20) & 1) ^ ((v >> 21) & 1) ^ ((v >> 22) & 1) ^ ((v >> 23) & 1) ^
+      ((v >> 24) & 1) ^ ((v >> 25) & 1) ^ ((v >> 26) & 1) ^ ((v >> 27) & 1) ^
+      ((v >> 28) & 1) ^ ((v >> 29) & 1) ^ ((v >> 30) & 1) ^ ((v >> 31) & 1);
+    const parity = bits & 1;
+    const dataWithParity = [
+      v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff, parity
+    ];
+    await this.sendCommand(new Uint8Array([0x12, 8, packet]));
+    // Turnaround + 32-bit data + parity (no ACK phase — target does not drive bus)
+    await this.sendCommand(new Uint8Array([0x12, 33, ...dataWithParity]));
+    // Idle cycles then read DPIDR to confirm the target responded
+    await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+    const dpidr = await this.readDp(0x00);
+    return dpidr;
   }
 
   async lineReset() {
     await this.sendCommand(new Uint8Array([0x12, 56, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
     await this.sendCommand(new Uint8Array([0x12, 8, 0x00]));
+  }
+
+  async transferBlockWrite(port, register, values, count = values.length, offset = 0) {
+    if (count === 0 || count > 65535) {
+      throw new Error(`transferBlockWrite: invalid count ${count}`);
+    }
+    const request = (port === "ap" ? 0x01 : 0x00) | 0x00 | (register & 0x0c);
+    const payloadSize = 5 + count * 4;
+    if (payloadSize > this.transport.packetSize) {
+      throw new Error(`transferBlockWrite: ${count} words exceeds packet size ${this.transport.packetSize}`);
+    }
+    const payload = new Uint8Array(this.transport.packetSize);
+    payload[0] = 0x06;
+    payload[1] = 0x00;
+    payload[2] = count & 0xff;
+    payload[3] = (count >>> 8) & 0xff;
+    payload[4] = request;
+    const dataView = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    for (let i = 0; i < count; i += 1) {
+      dataView.setUint32(5 + i * 4, values[offset + i], true);
+    }
+    this.debug("transferBlockWrite-tx", { count, register, request });
+    const response = await this.sendCommand(payload);
+    const respCount = response[1] | (response[2] << 8);
+    const respStatus = response[3] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferBlockWrite failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    return respCount;
+  }
+
+  async transferBlockRead(port, register, count) {
+    if (count === 0 || count > 65535) {
+      throw new Error(`transferBlockRead: invalid count ${count}`);
+    }
+    const request = (port === "ap" ? 0x01 : 0x00) | 0x02 | (register & 0x0c);
+    const payload = new Uint8Array(5);
+    payload[0] = 0x06;
+    payload[1] = 0x00;
+    payload[2] = count & 0xff;
+    payload[3] = (count >>> 8) & 0xff;
+    payload[4] = request;
+    this.debug("transferBlockRead-tx", { count, register, request });
+    const response = await this.sendCommand(payload);
+    const respCount = response[1] | (response[2] << 8);
+    const respStatus = response[3] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferBlockRead failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    const result = new Uint32Array(respCount);
+    for (let i = 0; i < respCount; i += 1) {
+      const offset = 4 + i * 4;
+      result[i] = ((response[offset] | (response[offset + 1] << 8) | (response[offset + 2] << 16) | (response[offset + 3] << 24)) >>> 0);
+    }
+    return result;
+  }
+
+  async transferMultiple(operations) {
+    const packetSize = this.transport.packetSize;
+    let payloadLen = 3;
+    for (const op of operations) {
+      payloadLen += 1;
+      if (op.value !== null && op.value !== undefined) {
+        payloadLen += 4;
+      }
+    }
+    if (payloadLen > packetSize) {
+      throw new Error(`transferMultiple: ${operations.length} operations exceed packet size ${packetSize}`);
+    }
+    const payload = new Uint8Array(Math.max(payloadLen, packetSize));
+    payload[0] = 0x05;
+    payload[1] = 0x00;
+    payload[2] = operations.length;
+    let offset = 3;
+    for (const op of operations) {
+      const isAp = op.port === "ap";
+      const isRead = op.value === null || op.value === undefined;
+      const req = (isAp ? 0x01 : 0x00) | (isRead ? 0x02 : 0x00) | (op.register & 0x0c);
+      payload[offset] = req;
+      offset += 1;
+      if (!isRead) {
+        payload[offset] = op.value & 0xff;
+        payload[offset + 1] = (op.value >>> 8) & 0xff;
+        payload[offset + 2] = (op.value >>> 16) & 0xff;
+        payload[offset + 3] = (op.value >>> 24) & 0xff;
+        offset += 4;
+      }
+    }
+    const response = await this.sendCommand(payload.slice(0, Math.max(payloadLen, packetSize)));
+    const respCount = response[1];
+    const respStatus = response[2] & 0x07;
+    if (respStatus !== 0x01) {
+      throw new Error(`transferMultiple failed: ACK=${respStatus}, transferred=${respCount}`);
+    }
+    if (respCount !== operations.length) {
+      throw new Error(`transferMultiple: expected ${operations.length} transfers, got ${respCount}`);
+    }
+    const reads = [];
+    let readOffset = 3;
+    for (const op of operations) {
+      const isRead = op.value === null || op.value === undefined;
+      if (isRead) {
+        const val = ((response[readOffset] | (response[readOffset + 1] << 8) | (response[readOffset + 2] << 16) | (response[readOffset + 3] << 24)) >>> 0);
+        reads.push(val);
+        readOffset += 4;
+      }
+    }
+    return reads;
   }
 }

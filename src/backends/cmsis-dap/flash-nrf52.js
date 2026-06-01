@@ -65,70 +65,128 @@ export class Nrf52FlashProgrammer {
     return segments;
   }
 
+  buildWordArray(image, startAddr, endAddr) {
+    const wordCount = Math.ceil((endAddr - startAddr + 1) / 4);
+    const words = new Uint32Array(wordCount);
+    for (let i = 0; i < wordCount; i += 1) {
+      const addr = startAddr + i * 4;
+      const b0 = image.data.get(addr) ?? 0xff;
+      const b1 = image.data.get(addr + 1) ?? 0xff;
+      const b2 = image.data.get(addr + 2) ?? 0xff;
+      const b3 = image.data.get(addr + 3) ?? 0xff;
+      words[i] = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+    }
+    return words;
+  }
+
   async programImage(image) {
     const segments = this.segmentsFromAddresses(image.addresses);
+    const transport = this.adi.dapCore?.transport ?? null;
+    const origLog = transport?.log ?? null;
+    if (transport) transport.log = null;
 
-    this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
-    await this.setConfig(2);
+    try {
+      this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
+      await this.setConfig(2);
 
-    const pages = this.pagesForSegments(segments);
-    for (let i = 0; i < pages.length; i += 1) {
-      await this.erasePage(pages[i]);
-      const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
-      this.progressBus.emit({ type: "program", percent, message: `Erased page 0x${pages[i].toString(16)}` });
-    }
-
-    await this.setConfig(1);
-    const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
-    let writtenWords = 0;
-    for (const seg of segments) {
-      let currentAddr = seg.start;
-      while (currentAddr <= seg.end) {
-        const b0 = image.data.get(currentAddr) ?? 0xff;
-        const b1 = image.data.get(currentAddr + 1) ?? 0xff;
-        const b2 = image.data.get(currentAddr + 2) ?? 0xff;
-        const b3 = image.data.get(currentAddr + 3) ?? 0xff;
-        const value = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
-        await this.adi.writeMem32(currentAddr, value);
-        writtenWords += 1;
-        currentAddr += 4;
-        if (writtenWords % 128 === 0 || writtenWords === totalWords) {
-          const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
-          this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
-        }
+      const pages = this.pagesForSegments(segments);
+      for (let i = 0; i < pages.length; i += 1) {
+        await this.erasePage(pages[i]);
+        const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
+        this.progressBus.emit({ type: "program", percent, message: `Erased page 0x${pages[i].toString(16)}` });
       }
-    }
 
-    await this.setConfig(0);
-    this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
+      await this.setConfig(1);
+
+      const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
+      let writtenWords = 0;
+
+      for (const seg of segments) {
+        const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
+        const words = this.buildWordArray(image, seg.start, seg.end);
+        await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount);
+        writtenWords += segWordCount;
+        const percent = 40 + Math.floor((writtenWords / Math.max(1, totalWords)) * 55);
+        this.progressBus.emit({ type: "program", percent, message: `Programmed ${writtenWords}/${totalWords} words` });
+      }
+
+      await this.waitReady();
+      await this.setConfig(0);
+      this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
+    } finally {
+      if (transport) transport.log = origLog;
+    }
   }
 
   async verifyImage(image) {
     const segments = this.segmentsFromAddresses(image.addresses);
     const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
+    const useBlockRead = typeof this.adi.readMemBlockFast === "function";
     let checked = 0;
+
+    const transport = this.adi.dapCore?.transport ?? null;
+    const origLog = transport?.log ?? null;
+    if (transport) transport.log = null;
+
+    try {
+
     for (const seg of segments) {
-      let currentAddr = seg.start;
-      while (currentAddr <= seg.end) {
-        const read = await this.adi.readMem32(currentAddr);
-        const b0 = image.data.get(currentAddr) ?? 0xff;
-        const b1 = image.data.get(currentAddr + 1) ?? 0xff;
-        const b2 = image.data.get(currentAddr + 2) ?? 0xff;
-        const b3 = image.data.get(currentAddr + 3) ?? 0xff;
-        const expected = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
-        if (read !== expected) {
-          throw new Error(
-            `Verify mismatch at 0x${currentAddr.toString(16)}: got 0x${read.toString(16)}, expected 0x${expected.toString(16)}`
-          );
+      const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
+
+      if (useBlockRead) {
+        const maxReadWords = this.adi.maxReadBlockWordCount;
+        let offset = 0;
+        while (offset < segWordCount) {
+          const count = Math.min(maxReadWords, segWordCount - offset);
+          const readback = await this.adi.readMemBlockFast(seg.start + offset * 4, count);
+          const baseAddr = seg.start + offset * 4;
+          for (let j = 0; j < count; j += 1) {
+            const addr = baseAddr + j * 4;
+            const b0 = image.data.get(addr) ?? 0xff;
+            const b1 = image.data.get(addr + 1) ?? 0xff;
+            const b2 = image.data.get(addr + 2) ?? 0xff;
+            const b3 = image.data.get(addr + 3) ?? 0xff;
+            const expected = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+            if (readback[j] !== expected) {
+              throw new Error(
+                `Verify mismatch at 0x${addr.toString(16)}: got 0x${readback[j].toString(16)}, expected 0x${expected.toString(16)}`
+              );
+            }
+          }
+          checked += count;
+          offset += count;
+          if (checked % 256 === 0 || checked === totalWords) {
+            const percent = Math.floor((checked / Math.max(1, totalWords)) * 100);
+            this.progressBus.emit({ type: "verify", percent, message: `Verified ${checked}/${totalWords} words` });
+          }
         }
-        checked += 1;
-        currentAddr += 4;
-        if (checked % 128 === 0 || checked === totalWords) {
-          const percent = Math.floor((checked / Math.max(1, totalWords)) * 100);
-          this.progressBus.emit({ type: "verify", percent, message: `Verified ${checked}/${totalWords} words` });
+      } else {
+        let currentAddr = seg.start;
+        while (currentAddr <= seg.end) {
+          const read = await this.adi.readMem32(currentAddr);
+          const b0 = image.data.get(currentAddr) ?? 0xff;
+          const b1 = image.data.get(currentAddr + 1) ?? 0xff;
+          const b2 = image.data.get(currentAddr + 2) ?? 0xff;
+          const b3 = image.data.get(currentAddr + 3) ?? 0xff;
+          const expected = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+          if (read !== expected) {
+            throw new Error(
+              `Verify mismatch at 0x${currentAddr.toString(16)}: got 0x${read.toString(16)}, expected 0x${expected.toString(16)}`
+            );
+          }
+          checked += 1;
+          currentAddr += 4;
+          if (checked % 128 === 0 || checked === totalWords) {
+            const percent = Math.floor((checked / Math.max(1, totalWords)) * 100);
+            this.progressBus.emit({ type: "verify", percent, message: `Verified ${checked}/${totalWords} words` });
+          }
         }
       }
     }
     this.progressBus.emit({ type: "verify", percent: 100, message: "CMSIS-DAP verify complete" });
+
+    } finally {
+      if (transport) transport.log = origLog;
+    }
   }
 }

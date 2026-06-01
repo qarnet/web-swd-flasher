@@ -2,17 +2,45 @@ import { ProbeBackend } from "../backend-interface.js";
 import { CmsisDapWebUsbTransport } from "./transport-webusb.js";
 import { CmsisDapCore } from "./dap-core.js";
 import { AdiSession } from "./adi.js";
-import { Nrf52Target } from "./nrf52-target.js";
 import { Nrf52FlashProgrammer } from "./flash-nrf52.js";
+import { Nrf52Recovery } from "./nrf52-recovery.js";
+import { DapUartSession } from "./dap-uart.js";
+import { DapCortex } from "./dap-cortex.js";
+import { DapSwoSession } from "./dap-swo.js";
+import { TARGETS, detectTarget } from "../../targets/target-registry.js";
 
 export class CmsisDapBackend extends ProbeBackend {
-  constructor(progressBus, logger = null) {
+  constructor(progressBus, logger = null, swdClockHz = 1000000) {
     super();
     this.transport = new CmsisDapWebUsbTransport(logger);
-    this.core = new CmsisDapCore(this.transport);
+    this.core = new CmsisDapCore(this.transport, swdClockHz);
     this.adi = new AdiSession(this.core);
-    this.target = new Nrf52Target(this.adi);
     this.flash = new Nrf52FlashProgrammer(progressBus, this.adi);
+    this.recovery = new Nrf52Recovery(this.adi);
+    this.uart = new DapUartSession(this.core);
+    this.cortex = new DapCortex(this.adi);
+    this.swo = new DapSwoSession(this.core);
+    this._detectedTarget = null;
+    this._ficr = null;
+    this._targetOverride = null;
+  }
+
+  get activeTarget() {
+    return this._targetOverride ?? this._detectedTarget ?? TARGETS.find((t) => t.id === "generic");
+  }
+
+  get availableTargets() {
+    return TARGETS;
+  }
+
+  setTargetOverride(targetId) {
+    if (targetId === null || targetId === "auto") {
+      this._targetOverride = null;
+      return;
+    }
+    const found = TARGETS.find((t) => t.id === targetId);
+    if (!found) throw new Error(`Unknown target id: ${targetId}`);
+    this._targetOverride = found;
   }
 
   async requestDevice() {
@@ -26,6 +54,9 @@ export class CmsisDapBackend extends ProbeBackend {
   async connect() {
     await this.core.connect();
     await this.adi.connectSwd();
+    const { target, ficr } = await detectTarget(this.adi);
+    this._detectedTarget = target;
+    this._ficr = ficr;
   }
 
   async disconnect() {
@@ -33,18 +64,49 @@ export class CmsisDapBackend extends ProbeBackend {
   }
 
   async getProbeInfo() {
-    const info = await this.core.dapInfo();
+    const info = this.core._caps ?? await this.core.dapInfo();
     return {
       backend: "cmsis-dap",
-      name: this.transport.device?.productName || "CMSIS-DAP",
-      manufacturer: this.transport.device?.manufacturerName || "Unknown",
+      name: info.product || this.transport.device?.productName || "CMSIS-DAP",
+      manufacturer: info.vendor || this.transport.device?.manufacturerName || "Unknown",
       transport: info.transport,
-      packetSize: info.packetSize
+      packetSize: info.packetSize,
+      maxPacketCount: info.maxPacketCount,
+      maxPacketSize: info.maxPacketSize,
+      capabilities: info.capabilities,
+      hasSWD: info.hasSWD,
+      hasJTAG: info.hasJTAG,
+      hasSWO_UART: info.hasSWO_UART,
+      hasSWO_Manchester: info.hasSWO_Manchester,
+      hasAtomicCommands: info.hasAtomicCommands,
+      hasTestDomainTimer: info.hasTestDomainTimer,
+      hasSWO_Streaming: info.hasSWO_Streaming,
+      hasUART: info.hasUART
     };
   }
 
+  async checkProtection() {
+    return this.recovery.checkProtection();
+  }
+
+  async recoverDevice(onProgress = null) {
+    return this.recovery.eraseAll(onProgress);
+  }
+
   async getTargetInfo() {
-    return this.target.identify();
+    const tgt = this.activeTarget;
+    const dpidr = await this.adi.readDpidr();
+    return {
+      family: tgt.family,
+      part: tgt.label,
+      id: tgt.id,
+      dpidr: `0x${dpidr.toString(16)}`,
+      ficr: this._ficr,
+      flash: tgt.flash,
+      ram: tgt.ram,
+      programmer: tgt.programmer,
+      autoDetected: this._targetOverride === null
+    };
   }
 
   async readMemory(addr, len) {
@@ -67,12 +129,93 @@ export class CmsisDapBackend extends ProbeBackend {
     return { mode };
   }
 
+  get hasUART() {
+    return this.core._caps?.hasUART ?? false;
+  }
+
+  async openUart({ baudRate = 115200, onData = null, pollIntervalMs = 20 } = {}) {
+    await this.uart.open({ baudRate, onData, pollIntervalMs });
+  }
+
+  async closeUart() {
+    await this.uart.close();
+  }
+
+  async sendUart(data) {
+    await this.uart.send(data);
+  }
+
+  async selectSwdTarget(targetSel) {
+    return this.core.selectSwdTarget(targetSel);
+  }
+
+  async haltCore() { return this.cortex.halt(); }
+  async resumeCore() { return this.cortex.resume(); }
+  async stepCore() { return this.cortex.step(); }
+  async readCoreRegs() { return this.cortex.readCoreRegs(); }
+  async isCoreHalted() { return this.cortex.isHalted(); }
+
+  get hasSWO() {
+    return (this.core._caps?.hasSWO_UART || this.core._caps?.hasSWO_Manchester) ?? false;
+  }
+
+  async openSwo({ baudRate = 1000000, onData = null, pollIntervalMs = 50 } = {}) {
+    const mode = this.core._caps?.hasSWO_UART ? 1 : 2;
+    return this.swo.open({ baudRate, mode, onData, pollIntervalMs });
+  }
+
+  async closeSwo() { return this.swo.close(); }
+
   capabilities() {
     return {
       supportsReadMemory: true,
       supportsFlash: true,
       supportsVerify: true,
-      supportsReset: true
+      supportsReset: true,
+      supportsRecovery: true
     };
+  }
+
+  async diagRawRead32(addr) {
+    const adi = this.adi;
+    const core = this.core;
+    const results = {};
+    results.step1_selectAp = await (async () => {
+      await adi.selectAp(0, 0);
+      const sel = await core.transfer("dp", 0x08, null);
+      return `DP SELECT after selectAp(0,0): 0x${sel.toString(16)}`;
+    })();
+    results.step2_writeCSW = await (async () => {
+      await core.transferMultiple([
+        { port: "ap", register: 0x00, value: 0x23000052 }
+      ]);
+      return "CSW = 0x23000052 written via transferMultiple";
+    })();
+    results.step3_writeTAR = await (async () => {
+      await core.transferMultiple([
+        { port: "ap", register: 0x04, value: addr >>> 0 }
+      ]);
+      return `TAR = 0x${(addr >>> 0).toString(16)} written via transferMultiple`;
+    })();
+    results.step4_readDRW = await (async () => {
+      const val = await core.transferMultiple([
+        { port: "ap", register: 0x0c, value: null }
+      ]);
+      return `DRW read via transferMultiple: 0x${val[0].toString(16)}`;
+    })();
+    results.step5_selectAp_again = await (async () => {
+      await adi.selectAp(0, 0);
+      const sel = await core.transfer("dp", 0x08, null);
+      return `DP SELECT after second selectAp(0,0): 0x${sel.toString(16)}`;
+    })();
+    results.step6_readMem32 = await (async () => {
+      const val = await adi.readMem32(addr);
+      return `readMem32(0x${(addr >>> 0).toString(16)}): 0x${val.toString(16)}`;
+    })();
+    results.step7_readAnotherAddr = await (async () => {
+      const val = await adi.readMem32(addr + 4);
+      return `readMem32(0x${((addr + 4) >>> 0).toString(16)}): 0x${val.toString(16)}`;
+    })();
+    return results;
   }
 }

@@ -1,36 +1,23 @@
-import { MockBackend } from "../backends/mock-backend.js";
-import { JLinkWebUsbBackend } from "../backends/jlink-webusb/backend.js";
 import { CmsisDapBackend } from "../backends/cmsis-dap/backend.js";
-import { CmsisDapWebHidBackend } from "../backends/cmsis-dap/backend-webhid.js";
 
 export class BackendManager {
   constructor(progressBus, logger = null) {
     this.progressBus = progressBus;
     this.logger = logger;
     this.current = null;
+    this.swdClockHz = 1000000;
+  }
+
+  setSwdClockHz(hz) {
+    this.swdClockHz = hz;
   }
 
   setBackend(name) {
-    if (name === "mock") {
-      this.current = new MockBackend(this.progressBus);
-      return this.current;
-    }
-    if (name === "jlink-webusb") {
-      this.current = new JLinkWebUsbBackend(this.progressBus, this.logger);
-      return this.current;
-    }
-    if (name === "cmsis-dap") {
-      this.current = new CmsisDapBackend(this.progressBus, this.logger);
-      return this.current;
-    }
-    if (name === "cmsis-dap-webhid") {
-      this.current = new CmsisDapWebHidBackend(this.progressBus, this.logger);
-      return this.current;
-    }
-    throw new Error(`Unsupported backend: ${name}`);
+    this.current = new CmsisDapBackend(this.progressBus, this.logger, this.swdClockHz);
+    return this.current;
   }
 
-  getBackend(name = "mock") {
+  getBackend(name = "cmsis-dap") {
     if (!this.current) {
       this.current = this.setBackend(name);
     }

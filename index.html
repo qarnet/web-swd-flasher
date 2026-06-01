@@ -7,9 +7,13 @@
     <link rel="stylesheet" href="styles/base.css" />
   </head>
   <body>
-    <main class="app">
+    <div class="topbar">
+      <span class="led" id="status-led"></span>
       <h1>Web SWD Flasher</h1>
-      <p class="sub">nRF52 flashing over USB debug probes</p>
+      <span id="topbar-target">Not connected</span>
+      <button class="btn-icon" id="btn-theme" type="button" title="Toggle dark mode">🌙</button>
+    </div>
+    <main class="app">
 
       <section id="compat-banner" class="banner" hidden>
         <strong>WebUSB unavailable:</strong>
@@ -33,79 +37,200 @@
         <div class="row">
           <label for="backend-select">Backend</label>
           <select id="backend-select">
-            <option value="mock">mock</option>
-            <option value="jlink-webusb">jlink-webusb</option>
-            <option value="cmsis-dap">cmsis-dap</option>
-            <option value="cmsis-dap-webhid">cmsis-dap-webhid</option>
+            <option value="cmsis-dap" selected>CMSIS-DAP</option>
           </select>
-        </div>
-        <div class="row">
+          <label for="clock-select">SWD Clock</label>
+          <select id="clock-select">
+            <option value="100000">100 kHz</option>
+            <option value="500000">500 kHz</option>
+            <option value="1000000" selected>1 MHz</option>
+            <option value="2000000">2 MHz</option>
+            <option value="4000000">4 MHz</option>
+          </select>
           <button id="btn-connect" type="button">Connect Probe</button>
           <button id="btn-disconnect" type="button" disabled>Disconnect</button>
         </div>
+        <div class="row">
+          <label for="target-select">Target</label>
+          <select id="target-select" disabled>
+            <option value="auto">Auto-detect</option>
+          </select>
+        </div>
+        <div class="progress-bar" id="progress-bar" hidden>
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
         <p id="status" class="status">Idle</p>
-        <pre id="target-info" class="log"></pre>
+        <pre id="target-info" class="log" hidden></pre>
+        <pre id="probe-caps" class="log" hidden></pre>
       </section>
 
       <!-- Device Recovery -->
       <section id="tab-recovery" class="panel tab-panel" hidden>
         <h2>Device Recovery</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <p class="hint">Use CTRL-AP mass erase to recover an APPROTECT-locked device. All flash and UICR will be erased.</p>
+        <div class="row">
+          <button id="btn-check-protection" type="button" disabled>Check Protection</button>
+          <button id="btn-recover" type="button" disabled>Recover Device (Mass Erase)</button>
+        </div>
+        <p id="recovery-status" class="status"></p>
       </section>
 
       <!-- Firmware Image -->
       <section id="tab-firmware" class="panel tab-panel" hidden>
         <h2>Firmware Image</h2>
         <div class="row">
-          <input id="file-input" type="file" accept=".hex,.ihex" />
+          <input id="file-input" type="file" accept=".hex,.ihex" multiple />
+          <input id="url-input" type="text" placeholder="or add .hex URL…" style="width:8rem;" />
+          <select id="flash-mode-select" style="width:11rem;">
+            <option value="app-only">App only (0x26000+)</option>
+            <option value="full-flash" selected>Full flash (0x0+)</option>
+          </select>
+          <button id="btn-fetch-hex" type="button">Fetch URL</button>
+          <select id="builtin-select" style="width:11rem;" hidden>
+            <option value="">— Blinky —</option>
+            <option value="firmware/blinky-xiao_ble-bare.hex">bare (0x0000)</option>
+            <option value="firmware/blinky-xiao_mbr.hex">MBR (0x1000)</option>
+            <option value="firmware/blinky-xiao_sdv6.hex">UF2 SDv6 (0x26000)</option>
+            <option value="firmware/blinky-xiao_sdv7.hex">UF2 SDv7 (0x27000)</option>
+          </select>
+          <button id="btn-load-builtin" type="button" hidden>Load</button>
+          <button id="btn-clear-hex" type="button">Clear All</button>
         </div>
-        <div class="row">
+
+        <div id="file-list" style="margin-top:0.5rem;"></div>
+        <div id="flash-visualizer" style="margin:0.75rem 0;"></div>
+
+        <div class="row button-row">
           <button id="btn-program" type="button" disabled>Program</button>
           <button id="btn-verify" type="button" disabled>Verify</button>
           <button id="btn-reset" type="button" disabled>Reset Run</button>
+          <button id="btn-program-verify-reset" type="button" disabled>Program + Verify + Reset</button>
         </div>
         <label class="confirm">
           <input id="chk-confirm-program" type="checkbox" />
           I reviewed target info and image map; allow flash operations.
         </label>
         <p id="image-summary" class="status">No image loaded</p>
-        <pre id="image-map" class="log"></pre>
+        <pre id="image-map" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <!-- Debug -->
       <section id="tab-debug" class="panel tab-panel" hidden>
-        <h2>Debug</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <h2>Debug (Cortex-M)</h2>
+        <p class="hint">Halt/resume/step the Cortex-M core via DHCSR. Target must be connected.</p>
+        <div class="row">
+          <button id="btn-core-halt" type="button" disabled>Halt</button>
+          <button id="btn-core-resume" type="button" disabled>Resume</button>
+          <button id="btn-core-step" type="button" disabled>Step</button>
+          <button id="btn-core-regs" type="button" disabled>Read Registers</button>
+        </div>
+        <p id="debug-status" class="status"></p>
+        <pre id="debug-regs" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <!-- Memory Read -->
       <section id="tab-memory" class="panel tab-panel" hidden>
         <h2>Memory Read</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <div class="row">
+          <label for="mem-addr-input">Address</label>
+          <input id="mem-addr-input" type="text" value="0x0" style="width:10rem;" />
+          <label for="mem-len-input">Length (bytes)</label>
+          <input id="mem-len-input" type="text" value="256" style="width:8rem;" />
+          <button id="btn-mem-read" type="button" disabled>Read</button>
+          <button id="btn-mem-read-flash" type="button" disabled>Read All Flash</button>
+        </div>
+        <div class="row" style="margin-top:0.5rem;">
+          <button id="btn-mem-export" type="button" disabled>Export .bin</button>
+          <button id="btn-mem-export-hex" type="button" disabled>Export .hex</button>
+        </div>
+        <p id="mem-status" class="status"></p>
+        <pre id="mem-dump" class="log" style="font-size:0.75rem;overflow:auto;max-height:300px;" hidden></pre>
       </section>
 
       <!-- UICR -->
       <section id="tab-uicr" class="panel tab-panel" hidden>
-        <h2>UICR</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <h2>UICR (nRF52)</h2>
+        <p class="hint">User Information Configuration Registers. Read-only unless device is unlocked and NVMC write-enabled.</p>
+        <div class="row">
+          <button id="btn-uicr-read" type="button" disabled>Read UICR</button>
+        </div>
+        <p id="uicr-status" class="status"></p>
+        <pre id="uicr-dump" class="log" style="font-size:0.8rem;" hidden></pre>
       </section>
 
       <!-- RTT -->
       <section id="tab-rtt" class="panel tab-panel" hidden>
-        <h2>RTT</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <h2>RTT (Real-Time Transfer)</h2>
+        <p class="hint">Searches target RAM for SEGGER RTT control block, then polls ring buffer. Target must be running firmware with RTT initialized.</p>
+        <div class="row">
+          <label for="rtt-ram-start">RAM start</label>
+          <input id="rtt-ram-start" type="text" value="0x20000000" style="width:10rem;" />
+          <label for="rtt-ram-size">RAM size (KB)</label>
+          <input id="rtt-ram-size" type="text" value="256" style="width:6rem;" />
+          <label for="rtt-interval">Poll ms</label>
+          <input id="rtt-interval" type="number" value="50" min="10" max="500" style="width:5rem;" />
+        </div>
+        <div class="row">
+          <button id="btn-rtt-search" type="button" disabled>Search</button>
+          <button id="btn-rtt-start" type="button" disabled>Start Polling</button>
+          <button id="btn-rtt-stop" type="button" disabled>Stop</button>
+          <button id="btn-rtt-clear" type="button">Clear Log</button>
+        </div>
+        <p id="rtt-status" class="status"></p>
+        <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <div class="row" style="margin-top:0.5rem;">
+          <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
+          <button id="btn-rtt-send" type="button" disabled>Send</button>
+        </div>
       </section>
 
       <!-- UART Pass-through -->
       <section id="tab-uart" class="panel tab-panel" hidden>
-        <h2>UART Pass-through</h2>
-        <p class="stub-msg">Not yet implemented.</p>
+        <h2>UART Passthrough</h2>
+        <p class="hint">Routes probe UART to target TX/RX via DAP_UART_* (CMSIS-DAP v2.1). Probe must report capability bit 7 (UART Port).</p>
+        <div class="row">
+          <label for="uart-baud-select">Baud</label>
+          <select id="uart-baud-select">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+          <button id="btn-uart-open" type="button" disabled>Open</button>
+          <button id="btn-uart-close" type="button" disabled>Close</button>
+          <button id="btn-uart-clear" type="button">Clear</button>
+        </div>
+        <p id="uart-status" class="status"></p>
+        <pre id="uart-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <div class="row" style="margin-top:0.5rem;">
+          <input id="uart-tx-input" type="text" placeholder="Send string…" style="flex:1;" disabled />
+          <button id="btn-uart-send" type="button" disabled>Send</button>
+        </div>
+
+        <!-- SWO shown here when probe supports it -->
+        <section id="swo-panel" hidden style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+          <h2>SWO / ITM Trace</h2>
+          <p class="hint">Serial Wire Output trace via DAP_SWO_* (CMSIS-DAP v1.3). Probe must report capability bit 2 (SWO UART) or bit 3 (SWO Manchester).</p>
+          <div class="row">
+            <label for="swo-baud-input">Baud rate</label>
+            <input id="swo-baud-input" type="text" value="1000000" style="width:9rem;" />
+            <button id="btn-swo-open" type="button" disabled>Open</button>
+            <button id="btn-swo-close" type="button" disabled>Close</button>
+            <button id="btn-swo-clear" type="button">Clear</button>
+          </div>
+          <p id="swo-status" class="status"></p>
+          <pre id="swo-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        </section>
       </section>
 
       <!-- Event Log — always visible -->
       <section class="panel" id="event-log-panel">
         <h2>Event Log</h2>
-        <pre id="log" class="log"></pre>
+        <pre id="log" class="log log-collapsed"></pre>
       </section>
     </main>
 

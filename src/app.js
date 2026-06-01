@@ -1,265 +1,312 @@
 import { BackendManager } from "./core/backend-manager.js";
-import { normalizeError } from "./core/errors.js";
 import { ProgressBus } from "./core/progress.js";
-import { parseIntelHexFileText } from "./hex/intel-hex-parser.js";
-import { buildImageMap, formatImageMap } from "./hex/image-map.js";
-import { validateAppRange } from "./nrf/nrf52-memory-map.js";
-import { formatFicrInfo } from "./nrf/nrf52-ficr.js";
+import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
+import { buildImageMap } from "./hex/image-map.js";
 
-const compatBanner = document.getElementById("compat-banner");
-const compatMsg = document.getElementById("compat-msg");
-const btnConnect = document.getElementById("btn-connect");
-const btnDisconnect = document.getElementById("btn-disconnect");
-const btnProgram = document.getElementById("btn-program");
-const btnVerify = document.getElementById("btn-verify");
-const btnReset = document.getElementById("btn-reset");
-const backendSelect = document.getElementById("backend-select");
-const chkConfirmProgram = document.getElementById("chk-confirm-program");
-const statusEl = document.getElementById("status");
-const logEl = document.getElementById("log");
-const targetInfoEl = document.getElementById("target-info");
-const fileInput = document.getElementById("file-input");
-const imageSummary = document.getElementById("image-summary");
-const imageMapEl = document.getElementById("image-map");
+// UI Modules
+import * as logger from "./ui/logger.js";
+import * as settings from "./ui/settings.js";
+import * as connection from "./ui/connection.js";
+import * as hexManager from "./ui/hex-manager.js";
+import * as flashOps from "./ui/flash-ops.js";
+import * as recovery from "./ui/recovery.js";
+import * as memory from "./ui/memory.js";
+import * as uicr from "./ui/uicr.js";
+import * as debug from "./ui/debug.js";
+import * as rtt from "./ui/rtt-panel.js";
+import * as uart from "./ui/uart-panel.js";
+import * as swo from "./ui/swo-panel.js";
 
-const progressBus = new ProgressBus();
-const backendManager = new BackendManager(progressBus, (message) => log(message));
-const backendParam = new URLSearchParams(window.location.search).get("backend");
-const storedBackendName = window.localStorage.getItem("backend-name");
-const selectedBackendName = backendParam || storedBackendName || "mock";
-backendSelect.value = selectedBackendName;
-let backend = backendManager.getBackend(selectedBackendName);
-let imageContext = null;
-let connected = false;
+// Global state
+let progressBus, backendManager;
+window.readRegions = [];
 
-function log(message) {
-  const line = `[${new Date().toISOString()}] ${message}`;
-  logEl.textContent += `${line}\n`;
-  logEl.scrollTop = logEl.scrollHeight;
+// Gather all DOM elements
+function gatherElements() {
+  return {
+    // Topbar
+    statusEl: document.getElementById("status"),
+    statusLed: document.getElementById("status-led"),
+    topbarTarget: document.getElementById("topbar-target"),
+    btnTheme: document.getElementById("btn-theme"),
+
+    // Compat banner
+    compatBanner: document.getElementById("compat-banner"),
+    compatMsg: document.getElementById("compat-msg"),
+
+    // Connection
+    backendSelect: document.getElementById("backend-select"),
+    clockSelect: document.getElementById("clock-select"),
+    btnConnect: document.getElementById("btn-connect"),
+    btnDisconnect: document.getElementById("btn-disconnect"),
+    targetSelect: document.getElementById("target-select"),
+    targetInfoEl: document.getElementById("target-info"),
+    probeCapsEl: document.getElementById("probe-caps"),
+    progressBar: document.getElementById("progress-bar"),
+    progressFill: document.getElementById("progress-fill"),
+
+    // Hex management
+    fileInput: document.getElementById("file-input"),
+    urlInput: document.getElementById("url-input"),
+    builtinSelect: document.getElementById("builtin-select"),
+    btnFetchHex: document.getElementById("btn-fetch-hex"),
+    btnLoadBuiltin: document.getElementById("btn-load-builtin"),
+    btnClearHex: document.getElementById("btn-clear-hex"),
+    fileListEl: document.getElementById("file-list"),
+    imageSummary: document.getElementById("image-summary"),
+    imageMapEl: document.getElementById("image-map"),
+    flashModeSelect: document.getElementById("flash-mode-select"),
+    flashVisualizerEl: document.getElementById("flash-visualizer"),
+
+    // Flash operations
+    btnProgram: document.getElementById("btn-program"),
+    btnVerify: document.getElementById("btn-verify"),
+    btnReset: document.getElementById("btn-reset"),
+    btnProgramVerifyReset: document.getElementById("btn-program-verify-reset"),
+    chkConfirmProgram: document.getElementById("chk-confirm-program"),
+
+    // Recovery
+    btnCheckProtection: document.getElementById("btn-check-protection"),
+    btnRecover: document.getElementById("btn-recover"),
+    recoveryStatusEl: document.getElementById("recovery-status"),
+
+    // Memory
+    memAddrInput: document.getElementById("mem-addr-input"),
+    memLenInput: document.getElementById("mem-len-input"),
+    btnMemRead: document.getElementById("btn-mem-read"),
+    btnMemReadFlash: document.getElementById("btn-mem-read-flash"),
+    btnMemExport: document.getElementById("btn-mem-export"),
+    btnMemExportHex: document.getElementById("btn-mem-export-hex"),
+    memStatusEl: document.getElementById("mem-status"),
+    memDumpEl: document.getElementById("mem-dump"),
+
+    // UICR
+    btnUicrRead: document.getElementById("btn-uicr-read"),
+    uicrStatusEl: document.getElementById("uicr-status"),
+    uicrDumpEl: document.getElementById("uicr-dump"),
+
+    // Debug
+    btnCoreHalt: document.getElementById("btn-core-halt"),
+    btnCoreResume: document.getElementById("btn-core-resume"),
+    btnCoreStep: document.getElementById("btn-core-step"),
+    btnCoreRegs: document.getElementById("btn-core-regs"),
+    debugStatusEl: document.getElementById("debug-status"),
+    debugRegsEl: document.getElementById("debug-regs"),
+
+    // RTT
+    rttRamStartInput: document.getElementById("rtt-ram-start"),
+    rttRamSizeInput: document.getElementById("rtt-ram-size"),
+    rttIntervalInput: document.getElementById("rtt-interval"),
+    btnRttSearch: document.getElementById("btn-rtt-search"),
+    btnRttStart: document.getElementById("btn-rtt-start"),
+    btnRttStop: document.getElementById("btn-rtt-stop"),
+    btnRttClear: document.getElementById("btn-rtt-clear"),
+    rttStatusEl: document.getElementById("rtt-status"),
+    rttLogEl: document.getElementById("rtt-log"),
+    rttTxInput: document.getElementById("rtt-tx-input"),
+    btnRttSend: document.getElementById("btn-rtt-send"),
+
+    // UART
+    uartBaudSelect: document.getElementById("uart-baud-select"),
+    btnUartOpen: document.getElementById("btn-uart-open"),
+    btnUartClose: document.getElementById("btn-uart-close"),
+    btnUartClear: document.getElementById("btn-uart-clear"),
+    uartStatusEl: document.getElementById("uart-status"),
+    uartLogEl: document.getElementById("uart-log"),
+    uartTxInput: document.getElementById("uart-tx-input"),
+    btnUartSend: document.getElementById("btn-uart-send"),
+
+    // SWO
+    swoBaudInput: document.getElementById("swo-baud-input"),
+    btnSwoOpen: document.getElementById("btn-swo-open"),
+    btnSwoClose: document.getElementById("btn-swo-close"),
+    btnSwoClear: document.getElementById("btn-swo-clear"),
+    swoStatusEl: document.getElementById("swo-status"),
+    swoLogEl: document.getElementById("swo-log"),
+    swoPanelEl: document.getElementById("swo-panel"),
+
+    // Event log
+    logEl: document.getElementById("log"),
+  };
 }
 
-function setStatus(message) {
-  statusEl.textContent = message;
-  log(message);
+function refreshVisualizer() {
+  const els = gatherElements();
+  const backend = connection.getBackend();
+  if (!backend || !els.flashVisualizerEl) return;
+
+  const imageContext = hexManager.getImageContext();
+  const hexFiles = hexManager.getHexFiles();
+  const files = imageContext
+    ? [
+        {
+          name: "merged",
+          color: "#2c6e49",
+          segments: imageContext.map.segments,
+        },
+      ]
+    : hexFiles.map((f) => ({
+        name: f.name,
+        color: f.color,
+        segments: buildImageMap(f.parsed).segments,
+      }));
+
+  const target = backend.activeTarget;
+  const props = {
+    flashStart: target?.flash?.start ?? 0,
+    flashSize: target?.flash?.size ?? 0x100000,
+    targetId: target?.id ?? "unknown",
+    files,
+    readRegions: window.readRegions || [],
+  };
+
+  renderFlashVisualizer(els.flashVisualizerEl, props);
 }
 
-function renderTargetInfo(probe, target) {
-  const lines = [];
-  lines.push(`Backend: ${probe.backend}`);
-  lines.push(`Probe: ${probe.name || "unknown"}`);
-  if (probe.manufacturer) lines.push(`Manufacturer: ${probe.manufacturer}`);
-  if (probe.transport) lines.push(`Transport: ${probe.transport}`);
-  if (probe.packetSize) lines.push(`Packet size: ${probe.packetSize}`);
-  lines.push(`Target family: ${target.family || "unknown"}`);
-  lines.push(`Target part: ${target.part || "unknown"}`);
-  if (target.dpidr) lines.push(`DPIDR: ${target.dpidr}`);
-  if (target.ficr) {
-    lines.push(`FICR part: 0x${target.ficr.part.toString(16)}`);
-    lines.push(`FICR variant: 0x${target.ficr.variant.toString(16)}`);
-    lines.push(`FICR package: 0x${target.ficr.package.toString(16)}`);
-    lines.push(`FICR ram: ${target.ficr.ram}`);
-    lines.push(`FICR flash: ${target.ficr.flash}`);
-  }
-  targetInfoEl.textContent = lines.join("\n");
-}
+async function init() {
+  const els = gatherElements();
 
-function setConnected(connected) {
-  window.connectedState = connected;
-  btnConnect.disabled = connected;
-  btnDisconnect.disabled = !connected;
-  updateOperationButtons();
-}
+  // Initialize global services
+  progressBus = new ProgressBus();
+  backendManager = new BackendManager(
+    progressBus,
+    (msg) => logger.log(msg)
+  );
 
-function updateOperationButtons() {
-  const imageReady = imageContext?.policy?.ok === true;
-  const confirmed = chkConfirmProgram.checked;
-  const caps = backend.capabilities();
-  btnProgram.disabled = !(connected && imageReady && confirmed && caps.supportsFlash);
-  btnVerify.disabled = !(connected && imageReady && confirmed && caps.supportsVerify);
-  btnReset.disabled = !(connected && caps.supportsReset);
-}
+  // Read saved backend from localStorage
+  const savedBackend = window.localStorage.getItem("backend-name") || "cmsis-dap";
+  els.backendSelect.value = savedBackend;
 
-function checkCompatibility() {
-  if (!window.isSecureContext) {
-    compatMsg.textContent = "Secure context required (use localhost).";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
+  // Initialize all UI modules
+  logger.init(els);
+  settings.init(els);
+  connection.init(els, logger, backendManager);
+  hexManager.init(els, logger, connection);
+  flashOps.init(els, logger, hexManager, connection);
+  recovery.init(els, logger, connection);
+  memory.init(els, logger, connection);
+  uicr.init(els, logger, connection);
+  debug.init(els, logger, connection);
+  rtt.init(els, logger, connection);
+  uart.init(els, logger, connection);
+  swo.init(els, logger, connection);
 
-  const usesHid = backendSelect.value === "cmsis-dap-webhid";
-  if (usesHid && !navigator.hid) {
-    compatMsg.textContent = "navigator.hid unavailable in this browser profile.";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
+  // Setup callbacks for connection state changes
+  connection.setConnectedCallback((backend) => {
+    logger.log("Connected");
+    flashOps.onConnect(backend);
+    recovery.onConnect(backend);
+    memory.onConnect(backend);
+    uicr.onConnect(backend);
+    debug.onConnect(backend);
+    rtt.onConnect(backend);
+    uart.onConnect(backend);
+    swo.onConnect(backend);
+    hexManager.onConnect(backend);
+    refreshVisualizer();
+  });
 
-  if (!usesHid && !navigator.usb) {
-    compatMsg.textContent = "navigator.usb unavailable in this browser profile.";
-    compatBanner.hidden = false;
-    btnConnect.disabled = true;
-    return false;
-  }
+  connection.setDisconnectedCallback(() => {
+    logger.log("Disconnected");
+    flashOps.onDisconnect();
+    recovery.onDisconnect();
+    memory.onDisconnect();
+    uicr.onDisconnect();
+    debug.onDisconnect();
+    rtt.onDisconnect();
+    uart.onDisconnect();
+    swo.onDisconnect();
+    hexManager.onDisconnect();
+    refreshVisualizer();
+  });
 
-  compatBanner.hidden = true;
-  return true;
-}
+  // Setup callbacks for image changes
+  hexManager.setOnImageChangeCallback(() => {
+    flashOps.updateOperationButtons();
+    refreshVisualizer();
+  });
 
-async function connectProbe() {
-  try {
-    const known = await backend.getAuthorizedDevices();
-    if (known.length > 0) {
-      log(`Found ${known.length} previously authorized USB device(s).`);
+  // Setup visualizer refresh callbacks
+  flashOps.setRefreshVisualizerCallback(refreshVisualizer);
+  memory.setRefreshVisualizerCallback(refreshVisualizer);
+
+  // Wire event listeners
+  els.btnConnect.addEventListener("click", connection.connectProbe);
+  els.btnDisconnect.addEventListener("click", connection.disconnectProbe);
+
+  els.btnFetchHex.addEventListener("click", hexManager.onFetchHex);
+  els.btnLoadBuiltin.addEventListener("click", hexManager.onLoadBuiltin);
+  els.fileInput.addEventListener("change", hexManager.onFirmwareSelected);
+  els.btnClearHex.addEventListener("click", hexManager.onClearHex);
+
+  els.btnProgram.addEventListener("click", flashOps.runProgram);
+  els.btnVerify.addEventListener("click", flashOps.runVerify);
+  els.btnReset.addEventListener("click", flashOps.runReset);
+  els.btnProgramVerifyReset.addEventListener("click", flashOps.runProgramVerifyReset);
+  els.chkConfirmProgram.addEventListener("change", () => flashOps.updateOperationButtons());
+
+  els.btnCheckProtection.addEventListener("click", recovery.runCheckProtection);
+  els.btnRecover.addEventListener("click", recovery.runRecoverDevice);
+
+  els.btnMemRead.addEventListener("click", memory.runReadMemory);
+  els.btnMemReadFlash.addEventListener("click", memory.runReadAllFlash);
+  els.btnMemExport.addEventListener("click", memory.exportMemoryBin);
+  els.btnMemExportHex.addEventListener("click", memory.exportMemoryHex);
+
+  els.btnUicrRead.addEventListener("click", uicr.runUicrRead);
+
+  els.btnCoreHalt.addEventListener("click", debug.runCoreHalt);
+  els.btnCoreResume.addEventListener("click", debug.runCoreResume);
+  els.btnCoreStep.addEventListener("click", debug.runCoreStep);
+  els.btnCoreRegs.addEventListener("click", debug.runCoreRegs);
+
+  els.btnRttSearch.addEventListener("click", rtt.runRttSearch);
+  els.btnRttStart.addEventListener("click", rtt.runRttStart);
+  els.btnRttStop.addEventListener("click", rtt.runRttStop);
+  els.btnRttClear.addEventListener("click", () => { els.rttLogEl.textContent = ""; });
+  els.btnRttSend.addEventListener("click", rtt.runRttSend);
+
+  els.btnUartOpen.addEventListener("click", uart.openUartSession);
+  els.btnUartClose.addEventListener("click", uart.closeUartSession);
+  els.btnUartClear.addEventListener("click", () => { els.uartLogEl.textContent = ""; });
+  els.btnUartSend.addEventListener("click", uart.sendUartData);
+
+  els.btnSwoOpen.addEventListener("click", swo.openSwoSession);
+  els.btnSwoClose.addEventListener("click", swo.closeSwoSession);
+  els.btnSwoClear.addEventListener("click", () => { els.swoLogEl.textContent = ""; });
+
+  els.backendSelect.addEventListener("change", connection.onBackendChanged);
+  els.clockSelect.addEventListener("change", connection.onClockChanged);
+
+  // Progress bus subscription
+  progressBus.subscribe((event) => {
+    if (event.type === "progress") {
+      connection.setProgress(event.percent);
+    } else if (event.type === "log") {
+      logger.log(event.message);
     }
-    setStatus("Selecting probe...");
-    await backend.requestDevice();
-    await backend.connect();
-    const probe = await backend.getProbeInfo();
-    const target = await backend.getTargetInfo();
-    connected = true;
-    setConnected(true);
-    setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part}`);
-    renderTargetInfo(probe, target);
-    if (target.ficr) {
-      log(`FICR: ${formatFicrInfo(target.ficr)}`);
-    }
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Connect failed (${normalized.code}): ${normalized.message}`);
+  });
+
+  // Collapsible log
+  els.logEl.addEventListener("click", function() {
+    this.classList.toggle("log-collapsed");
+  });
+
+  // Tab switching
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+  function switchTab(tabId) {
+    tabBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabId));
+    tabPanels.forEach(panel => { panel.hidden = panel.id !== `tab-${tabId}`; });
   }
+  tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+
+  // Compatibility check
+  connection.checkCompatibility();
+  flashOps.updateOperationButtons();
+  refreshVisualizer();
+  logger.setStatus("Ready");
 }
 
-async function disconnectProbe() {
-  try {
-    await backend.disconnect();
-  } catch (error) {
-    log(`Close warning: ${error.message}`);
-  }
-  connected = false;
-  setConnected(false);
-  setStatus("Disconnected");
-  targetInfoEl.textContent = "";
-}
-
-async function onFirmwareSelected(event) {
-  const file = event.target.files?.[0];
-  if (!file) {
-    return;
-  }
-
-  try {
-    const text = await file.text();
-    const parsed = parseIntelHexFileText(text);
-    const map = buildImageMap(parsed);
-    const policy = validateAppRange(map);
-    imageContext = { parsed, map, policy };
-
-    imageMapEl.textContent = formatImageMap(map);
-    if (policy.ok) {
-      imageSummary.textContent = `Image accepted (${parsed.byteCount} bytes).`;
-      log("Firmware image passed range policy checks.");
-    } else {
-      imageSummary.textContent = "Image rejected by range policy.";
-      for (const issue of policy.violations) {
-        log(`Policy violation: ${issue}`);
-      }
-    }
-    updateOperationButtons();
-  } catch (error) {
-    imageContext = null;
-    imageMapEl.textContent = "";
-    imageSummary.textContent = `Image parse failed: ${error.message}`;
-    log(`Image parse failed: ${error.message}`);
-    updateOperationButtons();
-  }
-}
-
-async function runProgram() {
-  if (!imageContext?.policy?.ok) {
-    setStatus("Program blocked: image is missing or failed policy checks");
-    return;
-  }
-  try {
-    setStatus("Programming image...");
-    await backend.programImage(imageContext.parsed, { mode: "app-only" });
-    setStatus("Program complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Program failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function runVerify() {
-  if (!imageContext?.policy?.ok) {
-    setStatus("Verify blocked: image is missing or failed policy checks");
-    return;
-  }
-  try {
-    setStatus("Verifying image...");
-    await backend.verifyImage(imageContext.parsed, { mode: "app-only" });
-    setStatus("Verify complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Verify failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function runReset() {
-  try {
-    setStatus("Resetting target...");
-    await backend.reset("run");
-    setStatus("Reset complete");
-  } catch (error) {
-    const normalized = normalizeError(error);
-    setStatus(`Reset failed (${normalized.code}): ${normalized.message}`);
-  }
-}
-
-async function onBackendChanged(event) {
-  const name = event.target.value;
-  if (connected) {
-    await disconnectProbe();
-  }
-  backend = backendManager.setBackend(name);
-  window.localStorage.setItem("backend-name", name);
-  log(`Backend selected: ${name}`);
-  if (name === "jlink-webusb") {
-    log("Note: J-Link requires WebUSB in this app; WebHID is not supported for J-Link debug transport.");
-  }
-  if (name === "cmsis-dap-webhid") {
-    log("Note: CMSIS-DAP WebHID can open without target wiring, but SWD operations require SWDIO/SWDCLK/RESET wiring and target power.");
-  }
-  checkCompatibility();
-  updateOperationButtons();
-}
-
-// Tab switching
-const tabBtns = document.querySelectorAll(".tab-btn");
-const tabPanels = document.querySelectorAll(".tab-panel");
-
-function switchTab(tabId) {
-  tabBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabId));
-  tabPanels.forEach(panel => { panel.hidden = panel.id !== `tab-${tabId}`; });
-}
-
-tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
-
-btnConnect.addEventListener("click", connectProbe);
-btnDisconnect.addEventListener("click", disconnectProbe);
-btnProgram.addEventListener("click", runProgram);
-btnVerify.addEventListener("click", runVerify);
-btnReset.addEventListener("click", runReset);
-fileInput.addEventListener("change", onFirmwareSelected);
-backendSelect.addEventListener("change", onBackendChanged);
-chkConfirmProgram.addEventListener("change", updateOperationButtons);
-
-progressBus.subscribe((event) => {
-  log(`[${event.type}] ${event.message}`);
-});
-
-if (checkCompatibility()) {
-  log(`Backend selected: ${selectedBackendName}`);
-  updateOperationButtons();
-  setStatus("Ready");
-}
+// Wait for DOM
+document.addEventListener("DOMContentLoaded", init);

@@ -67,7 +67,12 @@ export function parseIntelHex(content) {
         throw new Error(`Line ${lineIndex + 1}: invalid extended linear address record`);
       }
       upperAddress = ((recordData[0] << 8) | recordData[1]) << 16;
-    } else if (recordType === 0x02 || recordType === 0x03 || recordType === 0x05) {
+    } else if (recordType === 0x02) {
+      if (recordData.length !== 2) {
+        throw new Error(`Line ${lineIndex + 1}: invalid extended segment address record`);
+      }
+      upperAddress = ((recordData[0] << 8) | recordData[1]) << 4;
+    } else if (recordType === 0x03 || recordType === 0x05) {
       continue;
     } else {
       throw new Error(`Line ${lineIndex + 1}: unsupported record type 0x${recordType.toString(16)}`);
