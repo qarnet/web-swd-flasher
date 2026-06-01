@@ -1,10 +1,11 @@
 import { BackendManager } from "./core/backend-manager.js";
 import { ProgressBus } from "./core/progress.js";
+import { SerialManager } from "./core/serial-manager.js";
 import { renderFlashVisualizer } from "./ui/flash-visualizer.js";
 import { buildImageMap } from "./hex/image-map.js";
 import { BUILD_TIMESTAMP } from "./build-info.js";
 
-// UI Modules
+// SWD UI Modules
 import * as logger from "./ui/logger.js";
 import * as settings from "./ui/settings.js";
 import * as connection from "./ui/connection.js";
@@ -15,18 +16,21 @@ import * as memory from "./ui/memory.js";
 import * as uicr from "./ui/uicr.js";
 import * as debug from "./ui/debug.js";
 import * as rtt from "./ui/rtt-panel.js";
-import * as uart from "./ui/uart-panel.js";
-import * as swo from "./ui/swo-panel.js";
+
+// Serial UI Modules
+import * as serialConnection from "./ui/serial-connection.js";
+import * as serialTerminal from "./ui/serial-terminal.js";
+import * as serialLogger from "./ui/serial-logger.js";
 
 // Global state
 let progressBus, backendManager;
+let serialManager;
 window.readRegions = [];
 
 // Gather all DOM elements
 function gatherElements() {
   return {
     // Topbar
-    statusEl: document.getElementById("status"),
     statusLed: document.getElementById("status-led"),
     topbarTarget: document.getElementById("topbar-target"),
     btnTheme: document.getElementById("btn-theme"),
@@ -46,7 +50,7 @@ function gatherElements() {
     progressBar: document.getElementById("progress-bar"),
     progressFill: document.getElementById("progress-fill"),
     flashProgressBar: document.getElementById("flash-progress-bar"),
-    flashProgressFill: document.getElementById("flash-progress-fill"),
+    flashProgressFill: document.getElementById("progress-fill"),
     flashProgressLabel: document.getElementById("flash-progress-label"),
 
     // Hex management
@@ -112,32 +116,32 @@ function gatherElements() {
     rttTxInput: document.getElementById("rtt-tx-input"),
     btnRttSend: document.getElementById("btn-rtt-send"),
 
-    // UART
-    uartBaudSelect: document.getElementById("uart-baud-select"),
-    btnUartOpen: document.getElementById("btn-uart-open"),
-    btnUartClose: document.getElementById("btn-uart-close"),
-    btnUartClear: document.getElementById("btn-uart-clear"),
-    btnUartDownload: document.getElementById("btn-uart-download"),
-    chkUartAutoScroll: document.getElementById("chk-uart-autoscroll"),
-    uartStatusEl: document.getElementById("uart-status"),
-    uartLogEl: document.getElementById("uart-log"),
-    uartTxInput: document.getElementById("uart-tx-input"),
-    btnUartSend: document.getElementById("btn-uart-send"),
-
-    // SWO
-    swoBaudInput: document.getElementById("swo-baud-input"),
-    btnSwoOpen: document.getElementById("btn-swo-open"),
-    btnSwoClose: document.getElementById("btn-swo-close"),
-    btnSwoClear: document.getElementById("btn-swo-clear"),
-    swoStatusEl: document.getElementById("swo-status"),
-    swoLogEl: document.getElementById("swo-log"),
-    swoPanelEl: document.getElementById("swo-panel"),
-
     // Event log
     logEl: document.getElementById("log"),
     btnLogClear: document.getElementById("btn-log-clear"),
     btnLogDownload: document.getElementById("btn-log-download"),
     chkVerbose: document.getElementById("chk-verbose"),
+
+    // Serial connection
+    serialCompatBanner: document.getElementById("serial-compat-banner"),
+    serialCompatMsg: document.getElementById("serial-compat-msg"),
+    serialBaudSelect: document.getElementById("serial-baud-select"),
+    btnSerialConnect: document.getElementById("btn-serial-connect"),
+    btnSerialDisconnect: document.getElementById("btn-serial-disconnect"),
+    serialStatusEl: document.getElementById("serial-status"),
+
+    // Serial terminal
+    serialTermLogEl: document.getElementById("serial-term-log"),
+    serialTxInput: document.getElementById("serial-tx-input"),
+    btnSerialSend: document.getElementById("btn-serial-send"),
+    btnSerialClear: document.getElementById("btn-serial-clear"),
+    btnSerialDownload: document.getElementById("btn-serial-download"),
+    chkSerialAutoScroll: document.getElementById("chk-serial-autoscroll"),
+
+    // Serial event log
+    serialLogEl: document.getElementById("serial-log"),
+    btnSerialLogClear: document.getElementById("btn-serial-log-clear"),
+    btnSerialLogDownload: document.getElementById("btn-serial-log-download"),
   };
 }
 
@@ -183,12 +187,13 @@ async function init() {
     progressBus,
     (msg, verbose) => verbose ? logger.logVerbose(msg) : logger.log(msg)
   );
+  serialManager = new SerialManager();
 
   // Read saved backend from localStorage
   const savedBackend = window.localStorage.getItem("backend-name") || "cmsis-dap";
   els.backendSelect.value = savedBackend;
 
-  // Initialize all UI modules
+  // Initialize SWD UI modules
   logger.init(els);
   settings.init(els);
   connection.init(els, logger, backendManager);
@@ -199,10 +204,13 @@ async function init() {
   uicr.init(els, logger, connection);
   debug.init(els, logger, connection);
   rtt.init(els, logger, connection);
-  uart.init(els, logger, connection);
-  swo.init(els, logger, connection);
 
-  // Setup callbacks for connection state changes
+  // Initialize Serial UI modules
+  serialConnection.init(els, serialManager);
+  serialTerminal.init(els, serialManager);
+  serialLogger.init(els);
+
+  // Setup SWD connection callbacks
   connection.setConnectedCallback((backend) => {
     logger.log("Connected");
     flashOps.onConnect(backend);
@@ -211,8 +219,6 @@ async function init() {
     uicr.onConnect(backend);
     debug.onConnect(backend);
     rtt.onConnect(backend);
-    uart.onConnect(backend);
-    swo.onConnect(backend);
     hexManager.onConnect(backend);
     refreshVisualizer();
   });
@@ -225,23 +231,19 @@ async function init() {
     uicr.onDisconnect();
     debug.onDisconnect();
     rtt.onDisconnect();
-    uart.onDisconnect();
-    swo.onDisconnect();
     hexManager.onDisconnect();
     refreshVisualizer();
   });
 
-  // Setup callbacks for image changes
+  // Setup image change callbacks
   hexManager.setOnImageChangeCallback(() => {
     flashOps.updateOperationButtons();
     refreshVisualizer();
   });
-
-  // Setup visualizer refresh callbacks
   flashOps.setRefreshVisualizerCallback(refreshVisualizer);
   memory.setRefreshVisualizerCallback(refreshVisualizer);
 
-  // Wire event listeners
+  // Wire SWD event listeners
   els.btnConnect.addEventListener("click", connection.connectProbe);
   els.btnDisconnect.addEventListener("click", connection.disconnectProbe);
 
@@ -278,18 +280,19 @@ async function init() {
   els.btnRttDownload.addEventListener("click", rtt.runRttDownload);
   els.btnRttSend.addEventListener("click", rtt.runRttSend);
 
-  els.btnUartOpen.addEventListener("click", uart.openUartSession);
-  els.btnUartClose.addEventListener("click", uart.closeUartSession);
-  els.btnUartClear.addEventListener("click", uart.runUartClear);
-  els.btnUartDownload.addEventListener("click", uart.runUartDownload);
-  els.btnUartSend.addEventListener("click", uart.sendUartData);
-
-  els.btnSwoOpen.addEventListener("click", swo.openSwoSession);
-  els.btnSwoClose.addEventListener("click", swo.closeSwoSession);
-  els.btnSwoClear.addEventListener("click", () => { els.swoLogEl.textContent = ""; });
-
   els.backendSelect.addEventListener("change", connection.onBackendChanged);
   els.clockSelect.addEventListener("change", connection.onClockChanged);
+
+  // Wire Serial event listeners
+  els.btnSerialConnect.addEventListener("click", serialConnection.connectSerial);
+  els.btnSerialDisconnect.addEventListener("click", serialConnection.disconnectSerial);
+  els.btnSerialSend.addEventListener("click", serialTerminal.sendSerialData);
+  els.btnSerialClear.addEventListener("click", serialTerminal.clearSerialLog);
+  els.btnSerialDownload.addEventListener("click", serialTerminal.downloadSerialLog);
+
+  // Wire serial event log controls
+  els.btnSerialLogClear.addEventListener("click", serialLogger.clearLog);
+  els.btnSerialLogDownload.addEventListener("click", serialLogger.downloadLogContent);
 
   // Progress bus subscription
   function setFlashProgress(percent, label) {
@@ -319,29 +322,42 @@ async function init() {
     }
   });
 
-  // Collapsible log
-  els.logEl.addEventListener("click", function() {
-    this.classList.toggle("log-collapsed");
-  });
+  // Collapsible SWD event log
+  els.logEl.addEventListener("click", function() { this.classList.toggle("log-collapsed"); });
+  els.serialLogEl.addEventListener("click", function() { this.classList.toggle("log-collapsed"); });
 
-  // Event log controls
+  // SWD event log controls
   els.btnLogClear.addEventListener("click", logger.clearLog);
   els.btnLogDownload.addEventListener("click", logger.downloadLogContent);
   els.chkVerbose.addEventListener("change", () => { logger.setVerbose(els.chkVerbose.checked); });
 
-  // Tab switching
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const tabPanels = document.querySelectorAll(".tab-panel");
+  // SWD tab switching (within SWD section)
+  const tabBtns = document.querySelectorAll("#section-swd .tab-btn");
+  const tabPanels = document.querySelectorAll("#section-swd .tab-panel");
   function switchTab(tabId) {
     tabBtns.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabId));
     tabPanels.forEach(panel => { panel.hidden = panel.id !== `tab-${tabId}`; });
   }
   tabBtns.forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 
-  // Compatibility check
+  // Top-level mode switching (SWD ↔ Serial)
+  const modeBtns = document.querySelectorAll(".mode-btn");
+  const sectionSwd = document.getElementById("section-swd");
+  const sectionSerial = document.getElementById("section-serial");
+  modeBtns.forEach(btn => btn.addEventListener("click", () => {
+    modeBtns.forEach(b => b.classList.toggle("active", b === btn));
+    const mode = btn.dataset.mode;
+    sectionSwd.hidden = mode !== "swd";
+    sectionSerial.hidden = mode !== "serial";
+  }));
+
+  // Compatibility checks
   connection.checkCompatibility();
+  serialConnection.checkCompatibility();
   flashOps.updateOperationButtons();
   refreshVisualizer();
+
+  // Build timestamp
   const buildTimeEl = document.getElementById("topbar-build-time");
   if (buildTimeEl && BUILD_TIMESTAMP !== "__BUILD_TIMESTAMP__") {
     const ts = BUILD_TIMESTAMP.endsWith("Z") ? BUILD_TIMESTAMP : BUILD_TIMESTAMP + "Z";
@@ -351,5 +367,4 @@ async function init() {
   logger.setStatus("Ready");
 }
 
-// Wait for DOM
 document.addEventListener("DOMContentLoaded", init);
