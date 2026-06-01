@@ -1,6 +1,7 @@
 import { AnsiRenderer } from "./ansi-renderer.js";
 import { downloadLog, autoScrollObserver } from "./log-panel-helpers.js";
 import * as serialLogger from "./serial-logger.js";
+import * as serialConnection from "./serial-connection.js";
 
 let elements, serialManager;
 let ansiRenderer = null;
@@ -22,9 +23,11 @@ export function init(els, manager) {
     ansiRenderer.write(elements.serialTermLogEl, text);
   };
 
+  serialConnection.setOnSerialConnected(() => { firstChunk = true; });
+
   navigator.serial?.addEventListener("disconnect", (e) => {
     if (serialManager._uart?._port === e.target) {
-      import("./serial-connection.js").then(m => m.onSerialDisconnect());
+      serialConnection.onSerialDisconnect();
     }
   });
 }
@@ -40,10 +43,6 @@ export function sendSerialData() {
 export function clearSerialLog() {
   elements.serialTermLogEl.textContent = "";
   ansiRenderer.reset();
-  firstChunk = true;
-}
-
-export function resetFirstChunk() {
   firstChunk = true;
 }
 
