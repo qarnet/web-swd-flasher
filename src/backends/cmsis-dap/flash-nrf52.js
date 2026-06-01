@@ -100,6 +100,7 @@ export class Nrf52FlashProgrammer {
 
       const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
       let writtenWords = 0;
+      let lastReportedWords = 0;
 
       for (const seg of segments) {
         const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
@@ -107,8 +108,10 @@ export class Nrf52FlashProgrammer {
         const words = this.buildWordArray(image, seg.start, seg.end);
         await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount, (doneInSeg) => {
           const total = wordsBeforeSeg + doneInSeg;
+          if (total - lastReportedWords < 1024 && total < totalWords) return;
+          lastReportedWords = total;
           const percent = 40 + Math.floor((total / Math.max(1, totalWords)) * 55);
-          this.progressBus.emit({ type: "program", percent, message: `Programmed ${total}/${totalWords} words` });
+          this.progressBus.emit({ type: "program", percent, message: `Programmed ${total * 4} / ${totalWords * 4} bytes` });
         });
         writtenWords += segWordCount;
       }
