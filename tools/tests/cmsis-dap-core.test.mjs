@@ -28,6 +28,48 @@ class FakeTransport {
   }
 }
 
+class SmartFakeTransport {
+  constructor() {
+    this.packetSize = 64;
+    this.commands = [];
+    this.frames = [];
+    this.lastCmd = 0;
+    this.openCalled = false;
+  }
+
+  async open() {
+    this.openCalled = true;
+  }
+
+  async close() {}
+
+  async write(frame) {
+    this.lastCmd = frame[0];
+    this.commands.push(frame[0]);
+    this.frames.push(frame);
+  }
+
+  async read() {
+    const cmd = this.lastCmd;
+    const response = new Uint8Array(64);
+    response[0] = cmd;
+    if (cmd === 0x02) {
+      // DAP_Connect: port=1 (SWD)
+      response[1] = 0x01;
+    } else if (cmd === 0x05) {
+      // DAP_Transfer: count=1, status=OK(1), value=0xa0000000 (CSYSPWRUPACK+CDBGPWRUPACK)
+      response[1] = 0x01;
+      response[2] = 0x01;
+      response[3] = 0x00;
+      response[4] = 0x00;
+      response[5] = 0x00;
+      response[6] = 0xa0;
+    }
+    // otherwise: [cmd, 0, 0, ...] which is fine for most commands
+    return response;
+  }
+}
+
 test("cmsis-dap transfer parses read values", async () => {
   const t = new FakeTransport();
   const core = new CmsisDapCore(t);
