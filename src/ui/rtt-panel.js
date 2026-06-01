@@ -59,7 +59,7 @@ export async function runRttSearch() {
 export function runRttStart() {
   if (!rttClient) return;
   const intervalMs = parseInt(elements.rttIntervalInput.value, 10) || 50;
-  rttClient
+  rttClient.removeAllListeners()
     .on("data", ({ channel, data }) => {
       const text = new TextDecoder().decode(data);
       rttLog(text);
