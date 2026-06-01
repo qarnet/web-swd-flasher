@@ -1,17 +1,22 @@
 import { normalizeError } from "../core/errors.js";
+import { downloadLog, setupAutoScroll } from "./log-panel-helpers.js";
 
 let elements, logger, connection;
 let uartOpen = false;
+let uartLogText = "";
+let autoScrollFn = null;
 
 function uartLog(text) {
+  uartLogText += text;
   elements.uartLogEl.textContent += text;
-  elements.uartLogEl.scrollTop = elements.uartLogEl.scrollHeight;
+  if (autoScrollFn) autoScrollFn();
 }
 
 export function init(els, log, conn) {
   elements = els;
   logger = log;
   connection = conn;
+  autoScrollFn = setupAutoScroll(elements.uartLogEl, elements.chkUartAutoScroll);
 }
 
 export async function openUartSession() {
@@ -33,6 +38,7 @@ export async function openUartSession() {
     elements.btnUartClose.disabled = false;
     elements.uartTxInput.disabled = false;
     elements.btnUartSend.disabled = false;
+    elements.btnUartDownload.disabled = false;
     elements.uartStatusEl.textContent = `Open at ${baudRate} baud`;
     logger.log(`UART opened at ${baudRate} baud`);
   } catch (error) {
@@ -49,6 +55,7 @@ export async function closeUartSession() {
   uartOpen = false;
   elements.btnUartOpen.disabled = !backend.hasUART;
   elements.btnUartClose.disabled = true;
+  elements.btnUartDownload.disabled = true;
   elements.uartTxInput.disabled = true;
   elements.btnUartSend.disabled = true;
   elements.uartStatusEl.textContent = "Closed";
@@ -67,6 +74,15 @@ export async function sendUartData() {
   }
 }
 
+export function runUartClear() {
+  uartLogText = "";
+  elements.uartLogEl.textContent = "";
+}
+
+export function runUartDownload() {
+  downloadLog(uartLogText, `uart-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
+}
+
 export function onConnect(backend) {
   elements.btnUartOpen.disabled = !backend.hasUART;
 }
@@ -77,8 +93,10 @@ export function onDisconnect() {
   }
   elements.btnUartOpen.disabled = true;
   elements.btnUartClose.disabled = true;
+  elements.btnUartDownload.disabled = true;
   elements.uartTxInput.disabled = true;
   elements.btnUartSend.disabled = true;
   elements.uartStatusEl.textContent = "";
   elements.uartLogEl.textContent = "";
+  uartLogText = "";
 }

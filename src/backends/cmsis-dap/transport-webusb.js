@@ -46,7 +46,7 @@ export class CmsisDapWebUsbTransport {
 
   debug(message, payload = null) {
     if (this.log) {
-      this.log(`[cmsis-dap] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`);
+      this.log(`[cmsis-dap] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`, true);
     }
   }
 

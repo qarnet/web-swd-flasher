@@ -1,20 +1,17 @@
 import { RttClient } from "../rtt/rtt-client.js";
 import { normalizeError } from "../core/errors.js";
 import { AnsiRenderer } from "./ansi-renderer.js";
+import { downloadLog, setupAutoScroll } from "./log-panel-helpers.js";
 
 let elements, logger, connection;
 let rttClient = null;
 let ansiRenderer = null;
+let autoScrollFn = null;
 
 function parseHexInput(s) {
   const t = s.trim();
   if (t.startsWith("0x") || t.startsWith("0X")) return parseInt(t, 16);
   return parseInt(t, 10);
-}
-
-function rttLog(msg) {
-  ansiRenderer.write(elements.rttLogEl, msg);
-  elements.rttLogEl.scrollTop = elements.rttLogEl.scrollHeight;
 }
 
 export function init(els, log, conn) {
@@ -62,10 +59,13 @@ export async function runRttSearch() {
 export function runRttStart() {
   if (!rttClient) return;
   const intervalMs = parseInt(elements.rttIntervalInput.value, 10) || 50;
+  ansiRenderer = new AnsiRenderer();
+  ansiRenderer.autoScroll = elements.chkRttAutoScroll.checked;
+  autoScrollFn = setupAutoScroll(elements.rttLogEl, elements.chkRttAutoScroll);
   rttClient.removeAllListeners()
     .on("data", ({ channel, data }) => {
       const text = new TextDecoder().decode(data);
-      rttLog(text);
+      ansiRenderer.write(elements.rttLogEl, text);
     })
     .on("error", (err) => {
       elements.rttStatusEl.textContent = `Poll error: ${err.message}`;
@@ -74,6 +74,7 @@ export function runRttStart() {
   elements.rttStatusEl.textContent = `Polling channel(s) every ${intervalMs}ms…`;
   elements.btnRttStart.disabled = true;
   elements.btnRttStop.disabled = false;
+  elements.btnRttDownload.disabled = false;
 }
 
 export function runRttStop() {
@@ -82,6 +83,16 @@ export function runRttStop() {
   elements.rttStatusEl.textContent = "Stopped";
   elements.btnRttStart.disabled = false;
   elements.btnRttStop.disabled = true;
+}
+
+export function runRttClear() {
+  elements.rttLogEl.textContent = "";
+  if (ansiRenderer) ansiRenderer.reset();
+}
+
+export function runRttDownload() {
+  if (!ansiRenderer) return;
+  downloadLog(ansiRenderer.plainText, `rtt-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
 }
 
 export async function runRttSend() {
@@ -106,6 +117,7 @@ export function onDisconnect() {
   elements.btnRttSearch.disabled = true;
   elements.btnRttStart.disabled = true;
   elements.btnRttStop.disabled = true;
+  elements.btnRttDownload.disabled = true;
   elements.rttTxInput.disabled = true;
   elements.btnRttSend.disabled = true;
   elements.rttStatusEl.textContent = "";

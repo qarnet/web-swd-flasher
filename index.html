@@ -181,6 +181,8 @@
           <button id="btn-rtt-start" type="button" disabled>Start Polling</button>
           <button id="btn-rtt-stop" type="button" disabled>Stop</button>
           <button id="btn-rtt-clear" type="button">Clear Log</button>
+          <button id="btn-rtt-download" type="button" disabled>Download Log</button>
+          <label class="checkbox-label"><input id="chk-rtt-autoscroll" type="checkbox" checked /> Auto-scroll</label>
         </div>
         <p id="rtt-status" class="status"></p>
         <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
@@ -208,7 +210,9 @@
           </select>
           <button id="btn-uart-open" type="button" disabled>Open</button>
           <button id="btn-uart-close" type="button" disabled>Close</button>
-          <button id="btn-uart-clear" type="button">Clear</button>
+          <button id="btn-uart-clear" type="button">Clear Log</button>
+          <button id="btn-uart-download" type="button" disabled>Download Log</button>
+          <label class="checkbox-label"><input id="chk-uart-autoscroll" type="checkbox" checked /> Auto-scroll</label>
         </div>
         <p id="uart-status" class="status"></p>
         <pre id="uart-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
@@ -236,6 +240,11 @@
       <!-- Event Log — always visible -->
       <section class="panel" id="event-log-panel">
         <h2>Event Log</h2>
+        <div class="row" style="margin-bottom:0.5rem;">
+          <button id="btn-log-clear" type="button">Clear</button>
+          <button id="btn-log-download" type="button">Download Log</button>
+          <label class="checkbox-label"><input id="chk-verbose" type="checkbox" /> Verbose (show TX/RX)</label>
+        </div>
         <pre id="log" class="log log-collapsed"></pre>
       </section>
     </main>

@@ -105,6 +105,8 @@ function gatherElements() {
     btnRttStart: document.getElementById("btn-rtt-start"),
     btnRttStop: document.getElementById("btn-rtt-stop"),
     btnRttClear: document.getElementById("btn-rtt-clear"),
+    btnRttDownload: document.getElementById("btn-rtt-download"),
+    chkRttAutoScroll: document.getElementById("chk-rtt-autoscroll"),
     rttStatusEl: document.getElementById("rtt-status"),
     rttLogEl: document.getElementById("rtt-log"),
     rttTxInput: document.getElementById("rtt-tx-input"),
@@ -115,6 +117,8 @@ function gatherElements() {
     btnUartOpen: document.getElementById("btn-uart-open"),
     btnUartClose: document.getElementById("btn-uart-close"),
     btnUartClear: document.getElementById("btn-uart-clear"),
+    btnUartDownload: document.getElementById("btn-uart-download"),
+    chkUartAutoScroll: document.getElementById("chk-uart-autoscroll"),
     uartStatusEl: document.getElementById("uart-status"),
     uartLogEl: document.getElementById("uart-log"),
     uartTxInput: document.getElementById("uart-tx-input"),
@@ -131,6 +135,9 @@ function gatherElements() {
 
     // Event log
     logEl: document.getElementById("log"),
+    btnLogClear: document.getElementById("btn-log-clear"),
+    btnLogDownload: document.getElementById("btn-log-download"),
+    chkVerbose: document.getElementById("chk-verbose"),
   };
 }
 
@@ -174,7 +181,7 @@ async function init() {
   progressBus = new ProgressBus();
   backendManager = new BackendManager(
     progressBus,
-    (msg) => logger.log(msg)
+    (msg, verbose) => logger.log(msg, verbose)
   );
 
   // Read saved backend from localStorage
@@ -267,12 +274,14 @@ async function init() {
   els.btnRttSearch.addEventListener("click", rtt.runRttSearch);
   els.btnRttStart.addEventListener("click", rtt.runRttStart);
   els.btnRttStop.addEventListener("click", rtt.runRttStop);
-  els.btnRttClear.addEventListener("click", () => { els.rttLogEl.textContent = ""; });
+  els.btnRttClear.addEventListener("click", rtt.runRttClear);
+  els.btnRttDownload.addEventListener("click", rtt.runRttDownload);
   els.btnRttSend.addEventListener("click", rtt.runRttSend);
 
   els.btnUartOpen.addEventListener("click", uart.openUartSession);
   els.btnUartClose.addEventListener("click", uart.closeUartSession);
-  els.btnUartClear.addEventListener("click", () => { els.uartLogEl.textContent = ""; });
+  els.btnUartClear.addEventListener("click", uart.runUartClear);
+  els.btnUartDownload.addEventListener("click", uart.runUartDownload);
   els.btnUartSend.addEventListener("click", uart.sendUartData);
 
   els.btnSwoOpen.addEventListener("click", swo.openSwoSession);
@@ -314,6 +323,11 @@ async function init() {
   els.logEl.addEventListener("click", function() {
     this.classList.toggle("log-collapsed");
   });
+
+  // Event log controls
+  els.btnLogClear.addEventListener("click", logger.clearLog);
+  els.btnLogDownload.addEventListener("click", logger.downloadLogContent);
+  els.chkVerbose.addEventListener("change", () => { logger.setVerbose(els.chkVerbose.checked); });
 
   // Tab switching
   const tabBtns = document.querySelectorAll(".tab-btn");

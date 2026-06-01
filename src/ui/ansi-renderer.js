@@ -43,46 +43,63 @@ export class AnsiRenderer {
     this._bg = null;
     this._bold = false;
     this._dim = false;
+    this._pending = "";
+    this._plainLog = "";
   }
 
   write(el, text) {
-    const parts = text.split(/\x1b\[([^m]*)m/);
-    let first = true;
-    for (const part of parts) {
-      if (first) {
-        first = false;
-        this._appendText(el, part);
-        continue;
-      }
-      first = false;
-      if (/^\d+(?:;\d+)*$/.test(part)) {
-        const codes = part.split(";").map(Number);
-        for (let i = 0; i < codes.length; i++) {
-          const c = codes[i];
-          if (c === 0) {
-            this._fg = null;
-            this._bg = null;
-            this._bold = false;
-            this._dim = false;
-          } else if (c === 1) {
-            this._bold = true;
-          } else if (c === 2) {
-            this._dim = true;
-          } else if (c === 22) {
-            this._bold = false;
-            this._dim = false;
-          } else if (ANSI_COLORS[c]) {
-            this._fg = ANSI_COLORS[c];
-          } else if (c === 39) {
-            this._fg = null;
-          } else if (ANSI_BG[c]) {
-            this._bg = ANSI_BG[c];
-          } else if (c === 49) {
-            this._bg = null;
-          }
+    text = this._pending + text;
+    this._pending = "";
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === "\x1b") {
+        const mEnd = text.indexOf("m", i + 1);
+        if (mEnd === -1) {
+          this._pending = text.slice(i);
+          break;
         }
+        const params = text.slice(i + 2, mEnd);
+        this._applySgr(params);
+        this._plainLog += text.slice(i, mEnd + 1);
+        i = mEnd + 1;
       } else {
-        this._appendText(el, "\x1b[" + part + "m");
+        let nextEsc = text.indexOf("\x1b", i);
+        if (nextEsc === -1) nextEsc = text.length;
+        const chunk = text.slice(i, nextEsc);
+        this._appendText(el, chunk);
+        this._plainLog += chunk;
+        i = nextEsc;
+      }
+    }
+    if (this._autoScroll && el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  _applySgr(params) {
+    if (!/^\d+(?:;\d+)*$/.test(params)) return;
+    const codes = params.split(";").map(Number);
+    for (const c of codes) {
+      if (c === 0) {
+        this._fg = null;
+        this._bg = null;
+        this._bold = false;
+        this._dim = false;
+      } else if (c === 1) {
+        this._bold = true;
+      } else if (c === 2) {
+        this._dim = true;
+      } else if (c === 22) {
+        this._bold = false;
+        this._dim = false;
+      } else if (ANSI_COLORS[c]) {
+        this._fg = ANSI_COLORS[c];
+      } else if (c === 39) {
+        this._fg = null;
+      } else if (ANSI_BG[c]) {
+        this._bg = ANSI_BG[c];
+      } else if (c === 49) {
+        this._bg = null;
       }
     }
   }
@@ -109,10 +126,20 @@ export class AnsiRenderer {
     return parts.length ? parts.join(";") : null;
   }
 
+  get plainText() {
+    return this._plainLog;
+  }
+
+  set autoScroll(v) {
+    this._autoScroll = v;
+  }
+
   reset() {
     this._fg = null;
     this._bg = null;
     this._bold = false;
     this._dim = false;
+    this._pending = "";
+    this._plainLog = "";
   }
 }
