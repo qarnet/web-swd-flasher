@@ -61,7 +61,7 @@ async function init() {
   const logEl = document.getElementById("log");
   const serialLogEl = document.getElementById("serial-log");
   const flashProgressBar = document.getElementById("flash-progress-bar");
-  const flashProgressFill = document.getElementById("progress-fill");
+  const flashProgressFill = document.getElementById("flash-progress-fill");
   const flashProgressLabel = document.getElementById("flash-progress-label");
   const chkVerbose = document.getElementById("chk-verbose");
   const backendSelect = document.getElementById("backend-select");

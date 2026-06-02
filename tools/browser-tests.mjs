@@ -178,8 +178,15 @@ async function main() {
 
     await runTest("program button triggers flash progress", async () => {
       await page.click("#btn-program");
-      await new Promise(r => setTimeout(r, 2500)); // wait for 100% + 1500ms hide timer
-      // After program completes, progress bar should be hidden again
+      // Check that progress bar becomes visible during program
+      await page.waitForFunction(() => {
+        const bar = document.getElementById("flash-progress-bar");
+        return bar && !bar.hidden;
+      }, { timeout: 3000 });
+      // Verify fill width is set (not 0%)
+      const width = await page.$eval("#flash-progress-fill", el => el.style.width);
+      if (!width || width === "0%") throw new Error(`progress fill width should be non-zero, got "${width}"`);
+      await new Promise(r => setTimeout(r, 2000));
     });
 
     await runTest("verify button works", async () => {
