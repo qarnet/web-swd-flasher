@@ -94,6 +94,11 @@ async function init() {
 
   const serialLogger = createPanelLogger(serialLogEl, { source: "serial" });
 
+  // Register backend capture BEFORE panels mount — panels subscribe to CONNECT
+  // and must read `backend` via backendProvider which this listener sets.
+  bus.on(Topics.BACKEND_CONNECTED, ({ backend: b }) => { backend = b; });
+  bus.on(Topics.BACKEND_DISCONNECTED, () => { backend = null; });
+
   // Panels
   const connectionPanel = new SwdConnectionPanel({ bus, backendProvider, backendManager, logger });
   connectionPanel.mount(document.getElementById("tab-connection"));
@@ -152,8 +157,8 @@ async function init() {
 
   bus.on(Topics.IMAGE_CHANGED, (payload) => refreshVisualizer(payload));
   bus.on(Topics.READ_REGIONS_CHANGED, () => refreshVisualizer());
-  bus.on(Topics.BACKEND_CONNECTED, ({ backend: b }) => { backend = b; refreshVisualizer(); });
-  bus.on(Topics.BACKEND_DISCONNECTED, () => { backend = null; refreshVisualizer(); });
+  bus.on(Topics.BACKEND_CONNECTED, () => refreshVisualizer());
+  bus.on(Topics.BACKEND_DISCONNECTED, () => refreshVisualizer());
 
   function setFlashProgress(percent, label) {
     if (percent === null) {
