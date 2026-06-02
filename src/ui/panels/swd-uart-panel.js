@@ -79,22 +79,10 @@ export class SwdUartPanel extends BasePanel {
     const backend = this._backendProvider();
     if (!backend) return;
 
-    // Get the core from the backend to create DapUartSession
     const core = backend.core;
     if (!core) {
       this._els.status.textContent = "UART not available on this backend";
       return;
-    }
-
-    // Check probe has UART capability
-    if (backend.getProbeInfo) {
-      try {
-        const probe = await backend.getProbeInfo();
-        if (!probe.hasUART) {
-          this._els.status.textContent = "Probe does not support DAP UART";
-          return;
-        }
-      } catch {}
     }
 
     const baudRate = parseInt(this._els.baudSelect.value, 10) || 115200;
