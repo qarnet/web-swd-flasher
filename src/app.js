@@ -182,6 +182,24 @@ async function init() {
   document.getElementById("btn-serial-log-download").addEventListener("click", () => serialLogger.downloadLogContent("serial-event-log"));
 
   renderBuildTimestamp(document.getElementById("topbar-build-time"), BUILD_TIMESTAMP);
+
+  // Keep the theme-color meta tag in sync with the app's light/dark mode.
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  function updateThemeColor() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    if (themeColorMeta) themeColorMeta.content = isDark ? "#1a2e1f" : "#2c6e49";
+  }
+  updateThemeColor();
+  new MutationObserver(updateThemeColor).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+
+  // Register service worker for PWA offline/install support.
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(console.error);
+  }
+
   logger.setStatus("Ready");
 }
 
