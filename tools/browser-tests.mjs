@@ -293,6 +293,21 @@ async function main() {
       if (t !== "") throw new Error(`rtt-log not cleared: "${t}"`);
     });
 
+    // ── 9. UART (DAP) ──────────────────────────────────────
+
+    console.log("\n── UART (DAP) ──");
+    await runTest("UART tab exists and switches", async () => {
+      await switchTab(page, "uart");
+      await new Promise(r => setTimeout(r, 200));
+      const panel = await page.$eval("#tab-uart", el => el.hidden);
+      if (panel) throw new Error("UART panel hidden after tab switch");
+    });
+
+    await runTest("UART connect button enabled after SWD connect", async () => {
+      const btn = await page.$eval("#btn-uart-connect", el => el.disabled);
+      if (btn) throw new Error("UART connect button disabled after SWD connect");
+    });
+
     // ── 9. Event log ────────────────────────────────────────
 
     console.log("\n── Event log ──");

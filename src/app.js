@@ -12,6 +12,7 @@ import { SwdUicrPanel } from "./ui/panels/swd-uicr-panel.js";
 import { SwdDebugPanel } from "./ui/panels/swd-debug-panel.js";
 import { SwdMemoryPanel } from "./ui/panels/swd-memory-panel.js";
 import { SwdRttPanel } from "./ui/panels/swd-rtt-panel.js";
+import { SwdUartPanel } from "./ui/panels/swd-uart-panel.js";
 import { SwdFirmwarePanel } from "./ui/panels/swd-firmware-panel.js";
 import { SwdConnectionPanel } from "./ui/panels/swd-connection-panel.js";
 import { SerialConnectionPanel } from "./ui/panels/serial-connection-panel.js";
@@ -114,6 +115,9 @@ async function init() {
 
   const rttPanel = new SwdRttPanel({ bus, backendProvider, logger });
   rttPanel.mount(document.getElementById("tab-rtt"));
+
+  const uartPanel = new SwdUartPanel({ bus, backendProvider, logger });
+  uartPanel.mount(document.getElementById("tab-uart"));
 
   const serialConnectionPanel = new SerialConnectionPanel({ bus, serialManager });
   serialConnectionPanel.mount(document.getElementById("serial-connection-panel"));
