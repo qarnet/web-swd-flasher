@@ -4,10 +4,6 @@
   grid-template-columns: 220px 1fr 240px;
   gap: 0.5rem;
   min-width: 0;
-  max-width: none;
-  width: calc(100vw - 2rem);
-  margin-left: calc(-50vw + 50% + 1rem);
-  margin-right: calc(-50vw + 50% + 1rem);
 }
 .terminal-panel-grid > .terminal-main { min-width: 0; }
 .terminal-panel-grid > h2,

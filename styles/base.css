@@ -89,7 +89,8 @@ body {
 }
 
 .app {
-  max-width: 920px;
+  max-width: none;
+  width: calc(100vw - 2rem);
   margin: 1rem auto;
   padding: 0 1rem 2rem;
 }
