@@ -61,7 +61,8 @@ export class SerialTerminalPanel extends BasePanel {
       if (this._firstChunk) { this._firstChunk = false; this._buffer.appendString("\n"); }
       this._buffer.append(bytes);
     });
-    this._bindBusListener(this._bus, Topics.SERIAL_CONNECTED, () => { this._firstChunk = true; });
+    this._bindBusListener(this._bus, Topics.SERIAL_CONNECTED, () => { this._firstChunk = true; this._controller?.notifyReadyChange(); });
+    this._bindBusListener(this._bus, Topics.SERIAL_DISCONNECTED, () => { this._controller?.notifyReadyChange(); });
 
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);

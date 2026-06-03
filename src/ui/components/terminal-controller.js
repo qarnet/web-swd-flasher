@@ -71,6 +71,7 @@ export class TerminalController {
     this._queueRunner.on("itemSent", (item) => {
       pushHistory(item.text);
       if (this._echoEnabled) {
+        this._buffer.appendString("\n");
         this._buffer.appendString(
           `\x1b[2m[${this._channelId}]$ ${item.text}\x1b[0m\n`,
           { source: "tx" },
@@ -142,6 +143,10 @@ export class TerminalController {
     this._injectLayout();
     this._renderTemplates();
     this._renderQueue();
+  }
+
+  notifyReadyChange() {
+    this._updateSendBtn();
   }
 
   destroy() {
@@ -505,6 +510,7 @@ export class TerminalController {
       await this._send(trimmed);
       pushHistory(trimmed);
       if (this._echoEnabled) {
+        this._buffer.appendString("\n");
         this._buffer.appendString(
           `\x1b[2m[${this._channelId}]$ ${trimmed}\x1b[0m\n`,
           { source: "tx" },
@@ -766,8 +772,12 @@ export class TerminalController {
       }
     });
 
+    this._updateSendBtn();
+  }
+
+  _updateSendBtn() {
     if (this._sendBtnEl) {
-      this._sendBtnEl.disabled = running || !this._isReady();
+      this._sendBtnEl.disabled = this._queueRunner.isRunning() || !this._isReady();
     }
   }
 
