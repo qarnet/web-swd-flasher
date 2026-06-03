@@ -422,15 +422,22 @@
   gap: 0.4rem;
   color: var(--muted);
 }
-.terminal-panel-grid ~ #event-log-panel,
-.terminal-panel-grid ~ #serial-event-log-panel,
 #event-log-panel,
 #serial-event-log-panel {
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  right: 0.5rem;
   background: var(--bg);
   z-index: 5;
-  margin-top: auto;
+  max-height: 8rem;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  padding-top: 0.3rem;
+}
+#event-log-panel[hidden],
+#serial-event-log-panel[hidden] {
+  display: none !important;
 }
 .event-log-toggle:hover { color: var(--fg); }
 .event-log-toggle .arrow {
