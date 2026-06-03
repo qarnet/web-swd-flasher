@@ -82,13 +82,46 @@ export class TerminalController {
     });
     this._queueRunner.on("running", () => this._renderQueue());
 
+    if (this._sendBtnEl && this._sendBtnEl.parentNode) {
+      const queueBtn = document.createElement("button");
+      queueBtn.textContent = "Queue";
+      queueBtn.className = "btn-queue";
+      queueBtn.addEventListener("click", () => {
+        const v = this._inputEl.value;
+        if (!v) return;
+        this._queueRunner.push(v);
+        this._inputEl.value = "";
+        this._inputEl.focus();
+        this._renderQueue();
+      });
+      this._sendBtnEl.parentNode.insertBefore(queueBtn, this._sendBtnEl);
+    }
+
     this._filterMode = "off";
     this._restoreFilter();
 
-    this._inputEl.addEventListener("keydown", (e) => this._onKeyDown(e));
+    this._boundKeyDown = (e) => this._onKeyDown(e);
+    this._boundSendClick = () => this._onSendClick();
+    this._inputEl.addEventListener("keydown", this._boundKeyDown);
     if (this._sendBtnEl) {
-      this._sendBtnEl.addEventListener("click", () => this._onSendClick());
+      this._sendBtnEl.addEventListener("click", this._boundSendClick);
     }
+
+    this._onDocClick = () => {
+      const menu = this._root.querySelector(".more-menu");
+      if (menu) menu.style.display = "none";
+    };
+    document.addEventListener("click", this._onDocClick);
+
+    this._inputEl.addEventListener("input", () => {
+      if (this._inputEl.value.startsWith("!") && !this._historyPopupOpen()) {
+        this._popupSavedInput = this._inputEl.value;
+        this._openHistoryPopup();
+      }
+      if (this._historyPopupOpen()) {
+        this._popupFilter();
+      }
+    });
 
     this._view.setAutoScroll(this._view._autoScroll);
     view._onLinePainted = (lineEl, lineIndex) => {
@@ -109,10 +142,11 @@ export class TerminalController {
   }
 
   destroy() {
-    this._inputEl.removeEventListener("keydown", this._onKeyDown);
+    this._inputEl.removeEventListener("keydown", this._boundKeyDown);
     if (this._sendBtnEl) {
-      this._sendBtnEl.removeEventListener("click", this._onSendClick);
+      this._sendBtnEl.removeEventListener("click", this._boundSendClick);
     }
+    document.removeEventListener("click", this._onDocClick);
     this._historyUnsub?.();
     this._templatesUnsub?.();
     this._queueRunner.stop();
@@ -238,7 +272,6 @@ export class TerminalController {
       e.stopPropagation();
       moreMenu.style.display = moreMenu.style.display === "none" ? "block" : "none";
     });
-    document.addEventListener("click", () => { moreMenu.style.display = "none"; }, { once: true });
 
     clearHistoryItem.addEventListener("click", () => {
       if (confirm("Clear shared command history?")) clearHistory();
@@ -386,10 +419,6 @@ export class TerminalController {
     }
     if (e.key === "ArrowUp") {
       if (this._historyPopupOpen()) { e.preventDefault(); this._popupNav(-1); return; }
-      if (this._inputEl.value.startsWith("!") && this._inputEl.value.length >= 1) {
-        this._openHistoryPopup();
-        return;
-      }
       e.preventDefault();
       this._historyUp();
       return;
@@ -471,6 +500,8 @@ export class TerminalController {
   _openHistoryPopup() {
     const existing = this._root.querySelector(".history-popup");
     if (existing) existing.remove();
+
+    this._popupSavedInput = this._inputEl.value;
 
     const inputRect = this._inputEl.getBoundingClientRect();
     const rootRect = this._root.getBoundingClientRect();

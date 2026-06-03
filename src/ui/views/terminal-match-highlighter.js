@@ -86,18 +86,18 @@ export function setCurrentMatch(rootEl, matchIndex, searchIndex) {
   const lineEl = rootEl.children[match.lineIndex];
   if (!lineEl) return false;
 
-  let markCount = 0;
+  let markIndex = 0;
+  for (let i = 0; i < idx; i++) {
+    if (matches[i].lineIndex === match.lineIndex) markIndex++;
+  }
+
   const marks = lineEl.querySelectorAll("mark.term-match");
   if (marks.length === 0) return false;
+  if (markIndex >= marks.length) markIndex = 0;
 
-  for (const mark of marks) {
-    if (markCount === 0) {
-      mark.classList.remove("term-match");
-      mark.classList.add("term-match-current");
-      mark.scrollIntoView({ block: "center" });
-      break;
-    }
-    markCount++;
-  }
+  const target = marks[markIndex];
+  target.classList.remove("term-match");
+  target.classList.add("term-match-current");
+  target.scrollIntoView({ block: "center" });
   return true;
 }
