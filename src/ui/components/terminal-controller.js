@@ -274,18 +274,14 @@ export class TerminalController {
       btn.className = "toolbar-btn";
       btn.textContent = label;
       btn.title = title;
-      let open = false;
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        open = !open;
-        if (open) {
+        const isOpen = panelEl.style.display === "block";
+        if (!isOpen) {
           closeAllExcept(panelEl);
-          panelEl.style.display = "block";
-          btn.classList.add("active");
-        } else {
-          panelEl.style.display = "none";
-          btn.classList.remove("active");
         }
+        panelEl.style.display = isOpen ? "none" : "block";
+        btn.classList.toggle("active", !isOpen);
       });
       return btn;
     };
@@ -350,15 +346,15 @@ export class TerminalController {
     const actions = document.createElement("div");
     actions.className = "dd-actions";
     actions.innerHTML = `
-      <button class="dd-clear">Clear</button>
-      <button class="dd-download">Download</button>
+      <button class="dd-clear">Clear Log</button>
+      <button class="dd-download">Download Log</button>
     `;
     panel.appendChild(actions);
 
     const checks = document.createElement("div");
     checks.className = "dd-checks";
 
-    const main = this._view._rootEl.parentNode;
+    const main = this._view._rootEl.closest(".terminal-main");
     const autoChk = main.querySelector("#chk-" + this._channelId + "-autoscroll");
     const crChk = main.querySelector("#chk-" + this._channelId + "-cr-newline");
     const echoChk = main.querySelector("#chk-" + this._channelId + "-echo");
