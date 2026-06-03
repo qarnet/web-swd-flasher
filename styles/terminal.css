@@ -2,8 +2,11 @@
 .terminal-panel-grid {
   display: grid;
   grid-template-columns: 220px 1fr 240px;
+  grid-template-rows: 1fr;
   gap: 0;
   min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .terminal-panel-grid[hidden] { display: none !important; }
 .terminal-panel-grid > .terminal-main {

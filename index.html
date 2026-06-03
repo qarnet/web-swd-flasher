@@ -48,7 +48,7 @@
         <button class="tab-btn" role="tab" data-tab="memory">Memory Read</button>
         <button class="tab-btn" role="tab" data-tab="uicr">UICR</button>
         <button class="tab-btn" role="tab" data-tab="rtt">RTT</button>
-        <button class="tab-btn" role="tab" data-tab="uart">UART</button>
+        <button class="tab-btn" role="tab" data-tab="uart">DAP UART</button>
       </nav>
 
       <!-- Connection -->
@@ -208,7 +208,7 @@
           <label class="checkbox-label"><input id="chk-rtt-echo" type="checkbox" checked /> Local echo</label>
         </div>
         <p id="rtt-status" class="status"></p>
-        <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <pre id="rtt-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
         <div class="row" style="margin-top:0.5rem;">
           <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
           <button id="btn-rtt-send" type="button" disabled>Send</button>
@@ -242,7 +242,7 @@
           <label class="checkbox-label"><input id="chk-uart-echo" type="checkbox" checked /> Local echo</label>
         </div>
         <p id="uart-status" class="status">Not connected</p>
-        <pre id="uart-log" class="log" style="min-height:150px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <pre id="uart-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
         <div class="row" style="margin-top:0.5rem;">
           <input id="uart-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
           <button id="btn-uart-send" type="button">Send</button>
@@ -300,7 +300,7 @@
           <label class="checkbox-label"><input id="chk-serial-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
           <label class="checkbox-label"><input id="chk-serial-echo" type="checkbox" checked /> Local echo</label>
         </div>
-        <pre id="serial-term-log" class="log" style="min-height:300px;max-height:500px;overflow:auto;font-size:0.8rem;"></pre>
+        <pre id="serial-term-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
         <div class="row" style="margin-top:0.5rem;">
           <input id="serial-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
           <button id="btn-serial-send" type="button">Send</button>
