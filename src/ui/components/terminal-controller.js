@@ -73,7 +73,7 @@ export class TerminalController {
       if (this._echoEnabled) {
         this._buffer.appendString("\n");
         this._buffer.appendString(
-          `\x1b[2m[${this._channelId}]$ ${item.text}\x1b[0m\n`,
+          `\x1b[2m${item.text}\x1b[0m\n`,
           { source: "tx" },
         );
       }
@@ -512,7 +512,7 @@ export class TerminalController {
       if (this._echoEnabled) {
         this._buffer.appendString("\n");
         this._buffer.appendString(
-          `\x1b[2m[${this._channelId}]$ ${trimmed}\x1b[0m\n`,
+          `\x1b[2m${trimmed}\x1b[0m\n`,
           { source: "tx" },
         );
       }
