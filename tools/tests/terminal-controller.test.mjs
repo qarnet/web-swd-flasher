@@ -129,7 +129,7 @@ test("TerminalController: search bar elements present", () => {
     logger: { log: () => {} },
   });
   const root = document.querySelector("#root");
-  assert.ok(root.querySelector(".terminal-search"), "should have search bar");
+  assert.ok(root.querySelector(".terminal-dropdown"), "should have dropdown panel");
   assert.ok(root.querySelector(".terminal-templates"), "should have template sidebar");
   assert.ok(root.querySelector(".terminal-queue"), "should have queue sidebar");
   assert.ok(root.querySelector(".search-query"), "should have query input");

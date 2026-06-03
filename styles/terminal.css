@@ -14,111 +14,131 @@
   border-left: 1px solid var(--border);
   padding-left: 0.5rem;
 }
+.terminal-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 999 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: var(--bg) !important;
+  padding: 0.5rem !important;
+  overflow: hidden;
+}
 @media (max-width: 720px) {
   .terminal-panel-grid { grid-template-columns: 1fr; }
   .terminal-panel-grid > .terminal-templates { border-right: none; padding-right: 0; }
   .terminal-panel-grid > .terminal-queue { border-left: none; padding-left: 0; }
 }
 
-/* ===== Toolbar ===== */
-.terminal-toolbar {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.15rem 0;
-  align-items: center;
+/* ===== Log wrapper (contains log + toolbar overlays) ===== */
+.terminal-log-wrapper {
   position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ===== Floating toolbar (top-right on console) ===== */
+.terminal-toolbar {
+  position: absolute;
+  top: 0;
+  right: 0;
   z-index: 10;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.15rem 0.25rem;
+  background: transparent;
 }
 .toolbar-btn {
   border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--muted);
-  padding: 0.15rem 0.4rem;
+  background: var(--log-bg);
+  color: var(--log-fg);
+  padding: 0.1rem 0.35rem;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.75rem;
   line-height: 1;
+  opacity: 0.7;
 }
 .toolbar-btn:hover,
 .toolbar-btn.active {
+  opacity: 1;
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
 }
 
-/* ===== Overlay panels (settings + search) ===== */
-.terminal-overlay,
-.terminal-search {
+/* ===== Dropdown panels (overlay on console) ===== */
+.terminal-dropdown {
   position: absolute;
   z-index: 20;
-  top: 100%;
-  left: 0;
+  top: 0;
   right: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   padding: 0.5rem;
+  min-width: 200px;
 }
-
-.terminal-settings-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+.terminal-search-panel {
+  min-width: 320px;
 }
-.tbar-actions {
+.dd-actions {
   display: flex;
   gap: 0.3rem;
+  margin-bottom: 0.4rem;
 }
-.tbar-actions button {
-  font-size: 0.75rem;
+.dd-actions button {
+  font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
-.tbar-checks {
+.dd-checks {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   align-items: center;
 }
-.tbar-checks .checkbox-label {
-  font-size: 0.75rem;
+.dd-checks .checkbox-label {
+  font-size: 0.7rem;
 }
 
-/* ===== Search bar (overlay mode) ===== */
-.terminal-search {
-  display: none;
+/* ===== Search inline (inside dropdown) ===== */
+.search-inline {
+  display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.3rem;
   align-items: center;
 }
-.terminal-search .search-query {
-  flex: 0 0 140px;
+.search-inline .search-query {
+  flex: 0 0 120px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
-  padding: 0.25rem 0.4rem;
+  padding: 0.2rem 0.35rem;
   border-radius: 4px;
-  font-size: 0.8rem;
-}
-.terminal-search .search-count {
   font-size: 0.75rem;
+}
+.search-inline .search-count {
+  font-size: 0.7rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  min-width: 50px;
 }
-.terminal-search button {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.4rem;
+.search-inline button {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
   border-radius: 4px;
   white-space: nowrap;
 }
-.terminal-search label {
-  font-size: 0.7rem;
+.search-inline label {
+  font-size: 0.65rem;
 }
-.terminal-search select {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.3rem;
+.search-inline select {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.25rem;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
@@ -287,6 +307,27 @@
   padding: 0.15rem 0.25rem;
   border-radius: 3px;
 }
+
+/* ===== Event Log collapse ===== */
+.event-log-toggle {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.3rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+}
+.event-log-toggle:hover { color: var(--fg); }
+.event-log-toggle .arrow {
+  display: inline-block;
+  transition: transform 0.15s;
+  font-size: 0.7rem;
+}
+.event-log-toggle .arrow.open { transform: rotate(90deg); }
+.event-log-collapsed { display: none; }
 
 /* ===== History popup ===== */
 .history-popup {

@@ -198,26 +198,19 @@ export class TerminalController {
     const h2 = main.querySelector("h2");
     if (h2) h2.remove();
 
+    const rows = main.querySelectorAll(".row");
+    for (const row of rows) {
+      const hasClear = row.querySelector('[id$="clear" i], .tbar-clear, [id*="clear" i]');
+      const hasDownload = row.querySelector('[id$="download" i], [id*="download" i]');
+      const hasChecks = row.querySelector('input[type="checkbox"]');
+      if ((hasClear || hasDownload) && hasChecks) {
+        row.style.display = "none";
+      }
+    }
+
     this._createToolbar(main);
 
-    const searchBar = this._createSearchBar();
-    main.appendChild(searchBar);
-
-    if (this._toolbarSearchBtn && searchBar) {
-      this._toolbarSearchBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (searchBar.style.display === "none") {
-          searchBar.style.display = "flex";
-          this._toolbarSearchBtn.classList.add("active");
-          this._toolbarSearchOverlay.style.display = "none";
-          const settingsBtn = this._toolbar.querySelector(".toolbar-settings");
-          if (settingsBtn) settingsBtn.classList.remove("active");
-        } else {
-          searchBar.style.display = "none";
-          this._toolbarSearchBtn.classList.remove("active");
-        }
-      });
-    }
+    this._collapseEventLog(panelEl);
 
     panelEl.classList.add("terminal-panel-grid");
     panelEl.style.position = "relative";
@@ -228,7 +221,7 @@ export class TerminalController {
 
   _unwrapLayout() {
     const panelEl = this._root.closest(".panel") || this._root;
-    panelEl.classList.remove("terminal-panel-grid");
+    panelEl.classList.remove("terminal-panel-grid", "terminal-fullscreen");
     panelEl.style.position = "";
     const main = panelEl.querySelector(".terminal-main");
     if (main) {
@@ -239,101 +232,152 @@ export class TerminalController {
     }
   }
 
+  _collapseEventLog(panelEl) {
+    const eventLogPanel = panelEl.parentElement?.querySelector("#event-log-panel, #serial-event-log-panel");
+    if (!eventLogPanel) return;
+    const h2 = eventLogPanel.querySelector("h2");
+    if (!h2) return;
+
+    let collapsed = true;
+    const wrapper = document.createElement("div");
+    wrapper.className = "event-log-toggle";
+    wrapper.innerHTML = '<span class="arrow">\u25B6</span> Event Log';
+    h2.parentNode.insertBefore(wrapper, h2);
+    h2.style.display = "none";
+
+    const row = eventLogPanel.querySelector(".row");
+    const logPre = eventLogPanel.querySelector("pre.log, .log-collapsed");
+    if (row) row.classList.add("event-log-collapsed");
+    if (logPre) logPre.classList.add("event-log-collapsed");
+
+    wrapper.addEventListener("click", () => {
+      collapsed = !collapsed;
+      const arrow = wrapper.querySelector(".arrow");
+      arrow.classList.toggle("open", !collapsed);
+      if (row) row.classList.toggle("event-log-collapsed", collapsed);
+      if (logPre) logPre.classList.toggle("event-log-collapsed", collapsed);
+    });
+  }
+
   _createToolbar(main) {
+    const logEl = this._view._rootEl;
+    const logWrapper = document.createElement("div");
+    logWrapper.className = "terminal-log-wrapper";
+    logEl.parentNode.insertBefore(logWrapper, logEl);
+    logWrapper.appendChild(logEl);
+
     const bar = document.createElement("div");
     bar.className = "terminal-toolbar";
 
-    const settingsBtn = document.createElement("button");
-    settingsBtn.className = "toolbar-btn toolbar-settings";
-    settingsBtn.textContent = "\u2699";
-    settingsBtn.title = "Settings";
+    const makeDropBtn = (label, title, panelEl) => {
+      const btn = document.createElement("button");
+      btn.className = "toolbar-btn";
+      btn.textContent = label;
+      btn.title = title;
+      let open = false;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        open = !open;
+        if (open) {
+          closeAllExcept(panelEl);
+          panelEl.style.display = "block";
+          btn.classList.add("active");
+        } else {
+          panelEl.style.display = "none";
+          btn.classList.remove("active");
+        }
+      });
+      return btn;
+    };
 
-    const searchBtn = document.createElement("button");
-    searchBtn.className = "toolbar-btn toolbar-search-toggle";
-    searchBtn.textContent = "\u{1F50D}";
-    searchBtn.title = "Search";
+    const settingsPanel = this._createSettingsPanel();
+    const searchPanel = this._createSearchPanel();
+    logWrapper.appendChild(settingsPanel);
+    logWrapper.appendChild(searchPanel);
+
+    const settingsBtn = makeDropBtn("\u2699", "Settings", settingsPanel);
+    const searchBtn = makeDropBtn("\u{1F50D}", "Search", searchPanel);
+
+    const fullscreenBtn = document.createElement("button");
+    fullscreenBtn.className = "toolbar-btn";
+    fullscreenBtn.textContent = "\u26F6";
+    fullscreenBtn.title = "Fullscreen";
+    let fs = false;
+    fullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fs = !fs;
+      const panel = this._root.closest(".terminal-panel-grid") || this._root;
+      panel.classList.toggle("terminal-fullscreen", fs);
+    });
 
     bar.appendChild(searchBtn);
     bar.appendChild(settingsBtn);
+    bar.appendChild(fullscreenBtn);
+    logWrapper.appendChild(bar);
 
-    const overlay = document.createElement("div");
-    overlay.className = "terminal-overlay";
-    overlay.style.display = "none";
+    const closeAllExcept = (keep) => {
+      [settingsPanel, searchPanel].forEach(p => {
+        if (p !== keep) p.style.display = "none";
+      });
+      bar.querySelectorAll(".toolbar-btn.active").forEach(b => {
+        if ((keep === settingsPanel && b === settingsBtn) ||
+            (keep === searchPanel && b === searchBtn)) return;
+        b.classList.remove("active");
+      });
+    };
 
-    const settingsPanel = document.createElement("div");
-    settingsPanel.className = "terminal-settings-panel";
+    const closeAll = () => {
+      settingsPanel.style.display = "none";
+      searchPanel.style.display = "none";
+      bar.querySelectorAll(".toolbar-btn.active").forEach(b => b.classList.remove("active"));
+    };
 
-    const actionsRow = document.createElement("div");
-    actionsRow.className = "tbar-actions";
-    actionsRow.innerHTML = `
-      <button class="tbar-clear">Clear</button>
-      <button class="tbar-download">Download</button>
+    bar.addEventListener("mousedown", (e) => e.stopPropagation());
+    document.addEventListener("click", (e) => {
+      if (!bar.contains(e.target) && !settingsPanel.contains(e.target) && !searchPanel.contains(e.target)) {
+        closeAll();
+      }
+    });
+
+    this._toolbarCloseAll = closeAll;
+  }
+
+  _createSettingsPanel() {
+    const panel = document.createElement("div");
+    panel.className = "terminal-dropdown";
+    panel.style.display = "none";
+
+    const actions = document.createElement("div");
+    actions.className = "dd-actions";
+    actions.innerHTML = `
+      <button class="dd-clear">Clear</button>
+      <button class="dd-download">Download</button>
     `;
-    settingsPanel.appendChild(actionsRow);
+    panel.appendChild(actions);
 
-    const checksRow = document.createElement("div");
-    checksRow.className = "tbar-checks";
+    const checks = document.createElement("div");
+    checks.className = "dd-checks";
 
+    const main = this._view._rootEl.parentNode;
     const autoChk = main.querySelector("#chk-" + this._channelId + "-autoscroll");
     const crChk = main.querySelector("#chk-" + this._channelId + "-cr-newline");
     const echoChk = main.querySelector("#chk-" + this._channelId + "-echo");
 
-    const addCheck = (el, label) => {
+    const addChk = (el, label) => {
       if (!el) return;
       const wrap = document.createElement("label");
       wrap.className = "checkbox-label";
       wrap.appendChild(el);
       wrap.appendChild(document.createTextNode(" " + label));
-      checksRow.appendChild(wrap);
+      checks.appendChild(wrap);
     };
-    addCheck(autoChk, "Scroll");
-    addCheck(crChk, "CR→NL");
-    addCheck(echoChk, "Echo");
-    settingsPanel.appendChild(checksRow);
+    addChk(autoChk, "Scroll");
+    addChk(crChk, "CR→NL");
+    addChk(echoChk, "Echo");
+    panel.appendChild(checks);
 
-    overlay.appendChild(settingsPanel);
-    bar.appendChild(overlay);
-
-    let openPanel = null;
-
-    const togglePanel = (panelEl, btn) => {
-      if (openPanel === panelEl) {
-        panelEl.style.display = "none";
-        btn.classList.remove("active");
-        openPanel = null;
-        return;
-      }
-      if (openPanel) {
-        openPanel.style.display = "none";
-        bar.querySelector(".toolbar-btn.active")?.classList.remove("active");
-      }
-      panelEl.style.display = "block";
-      btn.classList.add("active");
-      openPanel = panelEl;
-    };
-
-    settingsBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      togglePanel(overlay, settingsBtn);
-    });
-
-    document.addEventListener("click", (e) => {
-      if (!bar.contains(e.target)) {
-        overlay.style.display = "none";
-        settingsBtn.classList.remove("active");
-        const searchOverlay = main.querySelector(".terminal-search-overlay");
-        if (searchOverlay) {
-          searchOverlay.style.display = "none";
-          searchBtn.classList.remove("active");
-        }
-        openPanel = null;
-      }
-    });
-
-    actionsRow.querySelector(".tbar-clear").addEventListener("click", () => {
-      this._buffer.clear();
-    });
-    actionsRow.querySelector(".tbar-download").addEventListener("click", () => {
+    actions.querySelector(".dd-clear").addEventListener("click", () => this._buffer.clear());
+    actions.querySelector(".dd-download").addEventListener("click", () => {
       const blob = new Blob([this._buffer.toPlainText()], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -345,21 +389,16 @@ export class TerminalController {
       URL.revokeObjectURL(url);
     });
 
-    this._toolbar = bar;
-    this._toolbarSearchBtn = searchBtn;
-    this._toolbarSearchOverlay = overlay;
-
-    const logEl = this._view._rootEl;
-    if (logEl.parentNode === main) {
-      main.insertBefore(bar, logEl);
-    }
+    return panel;
   }
 
-  _createSearchBar() {
+  _createSearchPanel() {
+    const panel = document.createElement("div");
+    panel.className = "terminal-dropdown terminal-search-panel";
+    panel.style.display = "none";
+
     const bar = document.createElement("div");
-    bar.className = "terminal-search";
-    bar.style.display = "none";
-    bar.setAttribute("role", "search");
+    bar.className = "search-inline";
     bar.innerHTML = `
       <input type="text" class="search-query" placeholder="Search log\u2026" />
       <label><input type="checkbox" class="search-regex" /> Regex</label>
@@ -379,6 +418,7 @@ export class TerminalController {
         </ul>
       </span>
     `;
+    panel.appendChild(bar);
 
     const queryInput = bar.querySelector(".search-query");
     const regexChk = bar.querySelector(".search-regex");
@@ -432,8 +472,8 @@ export class TerminalController {
       this._applyFilterToAll();
       this._updateSearchCount(countEl);
       this._view.setAutoScroll(this._view._autoScroll);
-      bar.style.display = "none";
-      if (this._toolbarSearchBtn) this._toolbarSearchBtn.classList.remove("active");
+      panel.style.display = "none";
+      this._toolbarCloseAll?.();
     });
 
     moreBtn.addEventListener("click", (e) => {
@@ -447,12 +487,12 @@ export class TerminalController {
     });
 
     queryInput.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        closeBtn.click();
-      }
+      if (e.key === "Escape") closeBtn.click();
     });
 
-    return bar;
+    panel.addEventListener("mousedown", (e) => e.stopPropagation());
+
+    return panel;
   }
 
   _refreshSearch() {
