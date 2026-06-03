@@ -1,9 +1,12 @@
 import { Topics } from "../../core/event-bus-topics.js";
 import { normalizeError } from "../../core/errors.js";
-import { AnsiRenderer } from "../ansi-renderer.js";
-import { downloadLog, autoScrollObserver } from "../log-panel-helpers.js";
+import { TerminalBuffer } from "../terminal-buffer.js";
+import { TerminalView } from "../terminal-view.js";
+import { downloadLog } from "../log-panel-helpers.js";
 import { persistInput } from "../components/persist-input.js";
 import { BasePanel } from "./base-panel.js";
+
+const CR_KEY = "terminal:cr-as-newline:rtt";
 
 export class SwdRttPanel extends BasePanel {
   constructor({ bus, backendProvider, logger }) {
@@ -13,7 +16,8 @@ export class SwdRttPanel extends BasePanel {
     this._logger = logger;
     this._els = null;
     this._rttClient = null;
-    this._ansiRenderer = null;
+    this._buffer = null;
+    this._view = null;
   }
 
   mount(rootEl) {
@@ -27,6 +31,7 @@ export class SwdRttPanel extends BasePanel {
       btnClear: rootEl.querySelector("#btn-rtt-clear"),
       btnDownload: rootEl.querySelector("#btn-rtt-download"),
       chkAutoScroll: rootEl.querySelector("#chk-rtt-autoscroll"),
+      chkCrNewline: rootEl.querySelector("#chk-rtt-cr-newline"),
       status: rootEl.querySelector("#rtt-status"),
       log: rootEl.querySelector("#rtt-log"),
       txInput: rootEl.querySelector("#rtt-tx-input"),
@@ -36,7 +41,14 @@ export class SwdRttPanel extends BasePanel {
       throw new Error("SwdRttPanel: missing required DOM nodes under root");
     }
 
-    autoScrollObserver(this._els.log, this._els.chkAutoScroll);
+    const crFlag = localStorage.getItem(CR_KEY) !== "false";
+    this._els.chkCrNewline.checked = crFlag;
+    this._buffer = new TerminalBuffer({ channelId: "rtt", crAsNewline: crFlag });
+    this._view = new TerminalView({
+      buffer: this._buffer,
+      rootEl: this._els.log,
+      autoScroll: this._els.chkAutoScroll.checked,
+    });
     persistInput(this._els.ramStartInput, "rtt-ram-start");
     persistInput(this._els.ramSizeInput, "rtt-ram-size");
     persistInput(this._els.intervalInput, "rtt-interval");
@@ -47,6 +59,14 @@ export class SwdRttPanel extends BasePanel {
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);
     this._bindDomListener(this._els.btnSend, "click", this._onSend);
+    this._bindDomListener(this._els.chkAutoScroll, "change", () => {
+      this._view.setAutoScroll(this._els.chkAutoScroll.checked);
+    });
+    this._bindDomListener(this._els.chkCrNewline, "change", () => {
+      const v = this._els.chkCrNewline.checked;
+      localStorage.setItem(CR_KEY, String(v));
+      this._buffer.setCrAsNewline(v);
+    });
 
     this._bindBusListener(this._bus, Topics.BACKEND_CONNECTED, () => this._setEnabled(true));
     this._bindBusListener(this._bus, Topics.BACKEND_DISCONNECTED, () => {
@@ -58,7 +78,7 @@ export class SwdRttPanel extends BasePanel {
       this._els.txInput.disabled = true;
       this._els.btnSend.disabled = true;
       this._els.status.textContent = "";
-      this._els.log.textContent = "";
+      this._buffer.clear();
     });
 
     this._setEnabled(false);
@@ -67,6 +87,8 @@ export class SwdRttPanel extends BasePanel {
   unmount() {
     if (!this._els) return;
     this._teardown();
+    if (this._view) { this._view.destroy(); this._view = null; }
+    this._buffer = null;
     this._els = null;
   }
 
@@ -96,11 +118,11 @@ export class SwdRttPanel extends BasePanel {
     this._els.btnStart.disabled = true;
 
     this._rttClient = backend.createRttSession();
-    this._ansiRenderer = new AnsiRenderer();
+    this._buffer.clear();
     try {
       const found = await this._rttClient.search(ramStart, ramSize);
       if (found) {
-        this._els.status.textContent = `Control block at 0x${this._rttClient.controlBlockAddr.toString(16)} — ${this._rttClient.upChannelCount} up, ${this._rttClient.downChannelCount} down channel(s)`;
+        this._els.status.textContent = `Control block at 0x${this._rttClient.controlBlockAddr.toString(16)} \u2014 ${this._rttClient.upChannelCount} up, ${this._rttClient.downChannelCount} down channel(s)`;
         this._els.btnStart.disabled = false;
         if (this._rttClient.downChannelCount > 0) {
           this._els.txInput.disabled = false;
@@ -120,11 +142,10 @@ export class SwdRttPanel extends BasePanel {
   _onStart = () => {
     if (!this._rttClient) return;
     const intervalMs = parseInt(this._els.intervalInput.value, 10) || 50;
-    this._ansiRenderer = new AnsiRenderer();
+    this._buffer.clear();
     this._rttClient.removeAllListeners()
       .on("data", ({ channel, data }) => {
-        const text = new TextDecoder().decode(data);
-        this._ansiRenderer.write(this._els.log, text);
+        this._buffer.append(data);
       })
       .on("error", (err) => { this._els.status.textContent = `Poll error: ${err.message}`; });
     this._rttClient.startPolling(intervalMs);
@@ -142,15 +163,8 @@ export class SwdRttPanel extends BasePanel {
     this._els.btnStop.disabled = true;
   };
 
-  _onClear = () => {
-    this._els.log.textContent = "";
-    if (this._ansiRenderer) this._ansiRenderer.reset();
-  };
-
-  _onDownload = () => {
-    if (!this._ansiRenderer) return;
-    downloadLog(this._ansiRenderer.plainText, `rtt-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
-  };
+  _onClear = () => { this._buffer.clear(); };
+  _onDownload = () => { downloadLog(this._buffer.toPlainText(), `rtt-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`); };
 
   _onSend = async () => {
     if (!this._rttClient) return;

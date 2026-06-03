@@ -1,9 +1,12 @@
 import { Topics } from "../../core/event-bus-topics.js";
-import { AnsiRenderer } from "../ansi-renderer.js";
-import { downloadLog, autoScrollObserver } from "../log-panel-helpers.js";
+import { TerminalBuffer } from "../terminal-buffer.js";
+import { TerminalView } from "../terminal-view.js";
+import { downloadLog } from "../log-panel-helpers.js";
 import { persistInput } from "../components/persist-input.js";
 import { BasePanel } from "../panels/base-panel.js";
 import { DapUartSession } from "../../backends/cmsis-dap/dap-uart.js";
+
+const CR_KEY = "terminal:cr-as-newline:uart";
 
 export class SwdUartPanel extends BasePanel {
   constructor({ bus, backendProvider, logger }) {
@@ -13,7 +16,8 @@ export class SwdUartPanel extends BasePanel {
     this._logger = logger;
     this._els = null;
     this._uart = null;
-    this._ansiRenderer = null;
+    this._buffer = null;
+    this._view = null;
   }
 
   mount(rootEl) {
@@ -24,6 +28,7 @@ export class SwdUartPanel extends BasePanel {
       btnClear: rootEl.querySelector("#btn-uart-clear"),
       btnDownload: rootEl.querySelector("#btn-uart-download"),
       chkAutoScroll: rootEl.querySelector("#chk-uart-autoscroll"),
+      chkCrNewline: rootEl.querySelector("#chk-uart-cr-newline"),
       status: rootEl.querySelector("#uart-status"),
       log: rootEl.querySelector("#uart-log"),
       txInput: rootEl.querySelector("#uart-tx-input"),
@@ -33,8 +38,14 @@ export class SwdUartPanel extends BasePanel {
       throw new Error("SwdUartPanel: missing required DOM nodes under root");
     }
 
-    this._ansiRenderer = new AnsiRenderer();
-    autoScrollObserver(this._els.log, this._els.chkAutoScroll);
+    const crFlag = localStorage.getItem(CR_KEY) !== "false";
+    this._els.chkCrNewline.checked = crFlag;
+    this._buffer = new TerminalBuffer({ channelId: "uart", crAsNewline: crFlag });
+    this._view = new TerminalView({
+      buffer: this._buffer,
+      rootEl: this._els.log,
+      autoScroll: this._els.chkAutoScroll.checked,
+    });
     persistInput(this._els.baudSelect, "uart-baud");
 
     this._bindDomListener(this._els.btnConnect, "click", this._onConnect);
@@ -42,6 +53,14 @@ export class SwdUartPanel extends BasePanel {
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);
     this._bindDomListener(this._els.btnSend, "click", this._onSend);
+    this._bindDomListener(this._els.chkAutoScroll, "change", () => {
+      this._view.setAutoScroll(this._els.chkAutoScroll.checked);
+    });
+    this._bindDomListener(this._els.chkCrNewline, "change", () => {
+      const v = this._els.chkCrNewline.checked;
+      localStorage.setItem(CR_KEY, String(v));
+      this._buffer.setCrAsNewline(v);
+    });
 
     this._bindBusListener(this._bus, Topics.BACKEND_CONNECTED, () => {
       this._els.btnConnect.disabled = false;
@@ -60,6 +79,8 @@ export class SwdUartPanel extends BasePanel {
     if (!this._els) return;
     this._disconnectUart();
     this._teardown();
+    if (this._view) { this._view.destroy(); this._view = null; }
+    this._buffer = null;
     this._els = null;
   }
 
@@ -93,8 +114,7 @@ export class SwdUartPanel extends BasePanel {
       await this._uart.open({
         baudRate,
         onData: (bytes) => {
-          const text = new TextDecoder().decode(bytes);
-          this._ansiRenderer.write(this._els.log, text);
+          this._buffer.append(bytes);
         },
       });
       this._els.status.textContent = `Connected at ${baudRate} baud`;
@@ -112,15 +132,8 @@ export class SwdUartPanel extends BasePanel {
     this._logger.log("DAP UART disconnected");
   };
 
-  _onClear = () => {
-    this._els.log.textContent = "";
-    if (this._ansiRenderer) this._ansiRenderer.reset();
-  };
-
-  _onDownload = () => {
-    if (!this._ansiRenderer) return;
-    downloadLog(this._ansiRenderer.plainText, `uart-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
-  };
+  _onClear = () => { this._buffer.clear(); };
+  _onDownload = () => { downloadLog(this._buffer.toPlainText(), `uart-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`); };
 
   _onSend = async () => {
     if (!this._uart) return;
