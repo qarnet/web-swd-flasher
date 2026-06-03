@@ -122,7 +122,11 @@ export class TerminalController {
         this._openHistoryPopup();
       }
       if (this._historyPopupOpen()) {
-        this._popupFilter();
+        if (!this._inputEl.value.startsWith("!")) {
+          this._closeHistoryPopup(false);
+        } else {
+          this._popupFilter();
+        }
       }
     };
     this._inputEl.addEventListener("input", this._boundInput);
