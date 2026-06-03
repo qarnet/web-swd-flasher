@@ -210,6 +210,18 @@ export class TerminalController {
       }
     }
 
+    const rttInputRow = main.querySelector('#rtt-ram-start')?.closest('.row');
+    const rttBtnRow = main.querySelector('#btn-rtt-search')?.closest('.row');
+    if (rttInputRow && rttBtnRow && rttInputRow !== rttBtnRow) {
+      rttBtnRow.parentNode.insertBefore(rttBtnRow, rttInputRow);
+    }
+
+    const statusEl = main.querySelector('.status');
+    const transportRow = main.querySelector('[id$="-connect" i], [id$="-disconnect" i], [id$="-search" i]')?.closest('.row');
+    if (statusEl && transportRow && statusEl.parentNode === main) {
+      transportRow.appendChild(statusEl);
+    }
+
     this._createToolbar(main);
 
     this._collapseEventLog(panelEl);
@@ -377,11 +389,15 @@ export class TerminalController {
 
     const addChk = (el, label) => {
       if (!el) return;
+      const origParent = el.parentElement;
       const wrap = document.createElement("label");
       wrap.className = "checkbox-label";
       wrap.appendChild(el);
       wrap.appendChild(document.createTextNode(" " + label));
       checks.appendChild(wrap);
+      if (origParent && origParent.classList.contains("checkbox-label")) {
+        origParent.remove();
+      }
     };
     addChk(autoChk, "Auto-scroll");
     addChk(crChk, "Treat CR as newline");

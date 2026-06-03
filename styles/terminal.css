@@ -408,7 +408,10 @@
 }
 
 /* ===== Event Log collapse ===== */
-.event-log-toggle {
+.terminal-panel-grid ~ .panel .event-log-toggle,
+.terminal-panel-grid ~ #event-log-panel .event-log-toggle,
+#serial-event-log-panel .event-log-toggle,
+#event-log-panel .event-log-toggle {
   cursor: pointer;
   user-select: none;
   font-weight: 600;
@@ -419,6 +422,16 @@
   gap: 0.4rem;
   color: var(--muted);
 }
+.terminal-panel-grid ~ #event-log-panel,
+.terminal-panel-grid ~ #serial-event-log-panel,
+#event-log-panel,
+#serial-event-log-panel {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  z-index: 5;
+  margin-top: auto;
+}
 .event-log-toggle:hover { color: var(--fg); }
 .event-log-toggle .arrow {
   display: inline-block;
@@ -427,6 +440,24 @@
 }
 .event-log-toggle .arrow.open { transform: rotate(90deg); }
 .event-log-collapsed { display: none; }
+
+/* ===== Hide hints on SWD panels ===== */
+#tab-recovery .hint,
+#tab-debug .hint,
+#tab-uicr .hint { display: none; }
+
+/* ===== Connection status inline ===== */
+#serial-connection-panel .status {
+  display: inline;
+  font-weight: 400;
+  font-size: 0.75rem;
+  margin: 0 0 0 0.5rem;
+}
+
+/* ===== SWD panel compact ===== */
+#section-swd .panel .row {
+  gap: 0.3rem;
+}
 
 /* ===== History popup ===== */
 .history-popup {
