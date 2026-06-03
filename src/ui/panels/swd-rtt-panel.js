@@ -96,6 +96,7 @@ export class SwdRttPanel extends BasePanel {
       this._els.btnSend.disabled = true;
       this._els.status.textContent = "";
       this._buffer.clear();
+      this._controller?.notifyReadyChange();
     });
 
     this._setEnabled(false);
@@ -146,6 +147,7 @@ export class SwdRttPanel extends BasePanel {
           this._els.txInput.disabled = false;
           this._els.btnSend.disabled = false;
         }
+        this._controller?.notifyReadyChange();
       } else {
         this._els.status.textContent = "RTT control block not found in RAM range";
         this._rttClient = null;
@@ -171,6 +173,7 @@ export class SwdRttPanel extends BasePanel {
     this._els.btnStart.disabled = true;
     this._els.btnStop.disabled = false;
     this._els.btnDownload.disabled = false;
+    this._controller?.notifyReadyChange();
   };
 
   _onStop = () => {

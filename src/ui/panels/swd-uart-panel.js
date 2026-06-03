@@ -111,6 +111,7 @@ export class SwdUartPanel extends BasePanel {
       this._els.status.textContent = "Disconnected";
       this._els.btnConnect.disabled = false;
       this._els.btnDisconnect.disabled = true;
+      this._controller?.notifyReadyChange();
     }
   }
 
@@ -139,6 +140,7 @@ export class SwdUartPanel extends BasePanel {
       this._logger.log(`DAP UART connected at ${baudRate} baud`);
       this._els.btnConnect.disabled = true;
       this._els.btnDisconnect.disabled = false;
+      this._controller?.notifyReadyChange();
     } catch (err) {
       this._els.status.textContent = `UART open failed: ${err.message}`;
       this._logger.log(`DAP UART open failed: ${err.message}`);
