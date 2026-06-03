@@ -6,8 +6,22 @@
   min-width: 0;
 }
 .terminal-panel-grid > .terminal-main { min-width: 0; }
+.terminal-panel-grid > h2,
+.terminal-panel-grid > .hint,
+.terminal-panel-grid > .status {
+  grid-column: 1 / -1;
+}
 @media (max-width: 720px) {
   .terminal-panel-grid { grid-template-columns: 1fr; }
+}
+
+.btn-queue {
+  background: var(--border) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+.btn-queue:not([disabled]):hover {
+  background: var(--muted) !important;
 }
 
 /* ===== Search bar ===== */
@@ -55,7 +69,8 @@
 .terminal-templates {
   font-size: 0.8rem;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: calc(100vh - 200px);
+  min-width: 0;
 }
 .template-card {
   border: 1px solid var(--border);

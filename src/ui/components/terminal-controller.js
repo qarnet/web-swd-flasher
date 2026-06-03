@@ -53,10 +53,12 @@ export class TerminalController {
     const echoChk = this._root.querySelector(`#chk-${channelId}-echo`);
     if (echoChk) {
       echoChk.checked = this._echoEnabled;
-      echoChk.addEventListener("change", () => {
+      this._echoChk = echoChk;
+      this._boundEchoChange = () => {
         this._echoEnabled = echoChk.checked;
         localStorage.setItem(`terminal:echo:${channelId}`, String(echoChk.checked));
-      });
+      };
+      echoChk.addEventListener("change", this._boundEchoChange);
     }
 
     this._queueRunner = new QueueRunner({
@@ -113,7 +115,7 @@ export class TerminalController {
     };
     document.addEventListener("click", this._onDocClick);
 
-    this._inputEl.addEventListener("input", () => {
+    this._boundInput = () => {
       if (this._inputEl.value.startsWith("!") && !this._historyPopupOpen()) {
         this._popupSavedInput = this._inputEl.value;
         this._openHistoryPopup();
@@ -121,7 +123,8 @@ export class TerminalController {
       if (this._historyPopupOpen()) {
         this._popupFilter();
       }
-    });
+    };
+    this._inputEl.addEventListener("input", this._boundInput);
 
     this._view.setAutoScroll(this._view._autoScroll);
     view._onLinePainted = (lineEl, lineIndex) => {
@@ -143,8 +146,12 @@ export class TerminalController {
 
   destroy() {
     this._inputEl.removeEventListener("keydown", this._boundKeyDown);
+    this._inputEl.removeEventListener("input", this._boundInput);
     if (this._sendBtnEl) {
       this._sendBtnEl.removeEventListener("click", this._boundSendClick);
+    }
+    if (this._echoChk) {
+      this._echoChk.removeEventListener("change", this._boundEchoChange);
     }
     document.removeEventListener("click", this._onDocClick);
     this._historyUnsub?.();
@@ -154,7 +161,6 @@ export class TerminalController {
     this._unwrapLayout();
     this._root.querySelector(".terminal-templates")?.remove();
     this._root.querySelector(".terminal-queue")?.remove();
-    this._root.querySelector(".terminal-search")?.remove();
     const popup = this._root.querySelector(".history-popup");
     if (popup) popup.remove();
     const menu = this._root.querySelector(".more-menu");
@@ -164,10 +170,8 @@ export class TerminalController {
   _injectLayout() {
     const panelEl = this._root.closest(".panel") || this._root;
 
-    const searchBar = this._createSearchBar();
-    const logEl = this._view._rootEl;
-    const logParent = logEl.parentNode;
-    if (logParent) logParent.insertBefore(searchBar, logEl);
+    const main = document.createElement("div");
+    main.className = "terminal-main";
 
     const templates = document.createElement("aside");
     templates.className = "terminal-templates";
@@ -178,16 +182,36 @@ export class TerminalController {
     const queueEl = document.createElement("aside");
     queueEl.className = "terminal-queue";
 
+    while (panelEl.children.length > 0) {
+      main.appendChild(panelEl.children[0]);
+    }
+
+    const searchBar = this._createSearchBar();
+    const logEl = this._view._rootEl;
+    if (logEl.parentNode === main) {
+      main.insertBefore(searchBar, logEl);
+    } else {
+      main.appendChild(searchBar);
+    }
+
     panelEl.classList.add("terminal-panel-grid");
-    panelEl.insertBefore(templates, panelEl.firstChild);
+    panelEl.style.position = "relative";
+    panelEl.appendChild(templates);
+    panelEl.appendChild(main);
     panelEl.appendChild(queueEl);
   }
 
   _unwrapLayout() {
     const panelEl = this._root.closest(".panel") || this._root;
     panelEl.classList.remove("terminal-panel-grid");
-    const searchBar = panelEl.querySelector(".terminal-search");
-    if (searchBar) searchBar.remove();
+    panelEl.style.position = "";
+    const main = panelEl.querySelector(".terminal-main");
+    if (main) {
+      while (main.children.length > 0) {
+        panelEl.appendChild(main.children[0]);
+      }
+      main.remove();
+    }
   }
 
   _createSearchBar() {
@@ -509,7 +533,7 @@ export class TerminalController {
     const ul = document.createElement("ul");
     ul.className = "history-popup";
     ul.setAttribute("role", "listbox");
-    ul.style.top = `${inputRect.top - rootRect.top - 8}px`;
+    ul.style.top = `${inputRect.bottom - rootRect.top + 4}px`;
     ul.style.left = `${inputRect.left - rootRect.left}px`;
     ul.style.width = `${inputRect.offsetWidth}px`;
 
