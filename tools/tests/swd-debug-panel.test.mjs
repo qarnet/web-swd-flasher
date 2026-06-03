@@ -75,3 +75,41 @@ test("SwdDebugPanel regs renders output", async () => {
   assert.ok(document.querySelector("#debug-regs").hidden === false, "regs element should be visible");
   teardownDom();
 });
+
+test("SwdDebugPanel step hits cortex.step", async () => {
+  makeDom(`<div id="root"><button id="btn-core-halt"></button><button id="btn-core-resume"></button><button id="btn-core-step"></button><button id="btn-core-regs"></button><span id="debug-status"></span><pre id="debug-regs"></pre></div>`);
+  let stepCalled = false;
+  const cortex = { halt: async () => {}, resume: async () => {}, step: async () => { stepCalled = true; }, readCoreRegs: async () => ({}) };
+  const bus = new EventBus();
+  new SwdDebugPanel({ bus, backendProvider: () => makeFakeBackend({ cortex }), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-core-step").click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(stepCalled, true);
+  teardownDom();
+});
+
+test("SwdDebugPanel halt error shows in status", async () => {
+  makeDom(`<div id="root"><button id="btn-core-halt"></button><button id="btn-core-resume"></button><button id="btn-core-step"></button><button id="btn-core-regs"></button><span id="debug-status"></span><pre id="debug-regs"></pre></div>`);
+  const cortex = { halt: async () => { throw new Error("SWD fault"); }, resume: async () => {}, step: async () => {}, readCoreRegs: async () => ({}) };
+  const bus = new EventBus();
+  new SwdDebugPanel({ bus, backendProvider: () => makeFakeBackend({ cortex }), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-core-halt").click();
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(document.querySelector("#debug-status").textContent.toLowerCase().includes("fault") || document.querySelector("#debug-status").textContent.toLowerCase().includes("error") || document.querySelector("#debug-status").textContent.includes("SWD fault"));
+  teardownDom();
+});
+
+test("SwdDebugPanel regs error shows in status", async () => {
+  makeDom(`<div id="root"><button id="btn-core-halt"></button><button id="btn-core-resume"></button><button id="btn-core-step"></button><button id="btn-core-regs"></button><span id="debug-status"></span><pre id="debug-regs"></pre></div>`);
+  const cortex = { halt: async () => {}, resume: async () => {}, step: async () => {}, readCoreRegs: async () => { throw new Error("register read failed"); } };
+  const bus = new EventBus();
+  new SwdDebugPanel({ bus, backendProvider: () => makeFakeBackend({ cortex }), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-core-regs").click();
+  await new Promise(r => setTimeout(r, 10));
+  const status = document.querySelector("#debug-status").textContent;
+  assert.ok(status.includes("register read failed") || status.toLowerCase().includes("error") || status.toLowerCase().includes("failed"));
+  teardownDom();
+});

@@ -177,3 +177,83 @@ test("SwdRecoveryPanel mount/unmount releases listeners", () => {
   assert.ok(after < before || after === 0, "listeners should be released after unmount");
   teardownDom();
 });
+
+test("SwdRecoveryPanel recoverDevice happy path shows unlocked", async () => {
+  makeDom(`<div id="root">
+    <button id="btn-check-protection"></button>
+    <button id="btn-recover"></button>
+    <span id="recovery-status"></span>
+  </div>`);
+  const bus = new EventBus();
+  let eraseCalled = false;
+  const recovery = {
+    eraseAll: async (onProgress) => { eraseCalled = true; if (onProgress) onProgress({ busy: false }); return { unlocked: true }; },
+    checkProtection: async () => ({ locked: true, apProtectStatus: 1 }),
+  };
+  globalThis.window.confirm = () => true;
+  const panel = new SwdRecoveryPanel({
+    bus,
+    backendProvider: () => makeFakeBackend({ recovery }),
+    logger: { log: () => {} },
+  });
+  panel.mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-recover").click();
+  await new Promise(r => setTimeout(r, 50));
+  assert.equal(eraseCalled, true);
+  const status = document.querySelector("#recovery-status").textContent.toLowerCase();
+  assert.ok(status.includes("unlocked") || status.includes("complete"), `status="${status}"`);
+  teardownDom();
+});
+
+test("SwdRecoveryPanel recoverDevice shows still-locked when unlocked=false", async () => {
+  makeDom(`<div id="root">
+    <button id="btn-check-protection"></button>
+    <button id="btn-recover"></button>
+    <span id="recovery-status"></span>
+  </div>`);
+  const bus = new EventBus();
+  const recovery = {
+    eraseAll: async () => ({ unlocked: false }),
+    checkProtection: async () => ({ locked: true, apProtectStatus: 1 }),
+  };
+  globalThis.window.confirm = () => true;
+  const panel = new SwdRecoveryPanel({
+    bus,
+    backendProvider: () => makeFakeBackend({ recovery }),
+    logger: { log: () => {} },
+  });
+  panel.mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-recover").click();
+  await new Promise(r => setTimeout(r, 50));
+  const status = document.querySelector("#recovery-status").textContent.toLowerCase();
+  assert.ok(status.includes("locked") || status.includes("failed"), `expected "locked" in status, got: "${status}"`);
+  teardownDom();
+});
+
+test("SwdRecoveryPanel recoverDevice error path shows error", async () => {
+  makeDom(`<div id="root">
+    <button id="btn-check-protection"></button>
+    <button id="btn-recover"></button>
+    <span id="recovery-status"></span>
+  </div>`);
+  const bus = new EventBus();
+  const recovery = {
+    eraseAll: async () => { throw new Error("erase timed out"); },
+    checkProtection: async () => ({ locked: true, apProtectStatus: 1 }),
+  };
+  globalThis.window.confirm = () => true;
+  const panel = new SwdRecoveryPanel({
+    bus,
+    backendProvider: () => makeFakeBackend({ recovery }),
+    logger: { log: () => {} },
+  });
+  panel.mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-recover").click();
+  await new Promise(r => setTimeout(r, 50));
+  const status = document.querySelector("#recovery-status").textContent.toLowerCase();
+  assert.ok(status.includes("failed") || status.includes("erase timed out"), `expected failure in status, got: "${status}"`);
+  teardownDom();
+});

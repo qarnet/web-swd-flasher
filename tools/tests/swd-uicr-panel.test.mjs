@@ -54,3 +54,22 @@ test("SwdUicrPanel read happy path", async () => {
   assert.ok(document.querySelector("#uicr-status").textContent.includes("complete"));
   teardownDom();
 });
+
+test("SwdUicrPanel read error path shows error in status", async () => {
+  makeDom(`<div id="root"><button id="btn-uicr-read"></button><span id="uicr-status"></span><pre id="uicr-dump"></pre></div>`);
+  const memAccess = {
+    readMem32: async () => { throw new Error("SWD bus fault"); },
+  };
+  const bus = new EventBus();
+  new SwdUicrPanel({
+    bus,
+    backendProvider: () => makeFakeBackend({ memoryAccess: memAccess }),
+    logger: { log: () => {} },
+  }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-uicr-read").click();
+  await new Promise(r => setTimeout(r, 10));
+  const status = document.querySelector("#uicr-status").textContent.toLowerCase();
+  assert.ok(status.includes("failed") || status.includes("fault") || status.includes("error"), `status="${status}"`);
+  teardownDom();
+});

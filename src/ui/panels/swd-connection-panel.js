@@ -127,7 +127,8 @@ export class SwdConnectionPanel extends BasePanel {
       this._connected = true;
       this._populateTargetSelector(backend);
       if (target.id && target.id !== "generic") {
-        this._els.targetSelect.value = target.id;
+        const opt = this._els.targetSelect.querySelector(`option[value="${target.id}"]`);
+        if (opt) opt.selected = true;
       }
       const detectNote = target.autoDetected ? "(auto-detected)" : "(manual)";
       this._logger.setStatus(`Connected: ${probe.name} via ${probe.transport}; target ${target.part} ${detectNote}`);
@@ -166,7 +167,8 @@ export class SwdConnectionPanel extends BasePanel {
     this._els.btnConnect.disabled = false;
     this._els.btnDisconnect.disabled = true;
     this._els.targetSelect.disabled = true;
-    this._els.targetSelect.value = "auto";
+    const autoOpt = this._els.targetSelect.querySelector('option[value="auto"]');
+    if (autoOpt) autoOpt.selected = true;
     this._bus.emit(Topics.BACKEND_DISCONNECTED);
   };
 

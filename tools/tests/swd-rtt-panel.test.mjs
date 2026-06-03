@@ -144,3 +144,35 @@ test("SwdRttPanel BACKEND_DISCONNECTED stops client and disables", () => {
   assert.equal(document.querySelector("#btn-rtt-start").disabled, true);
   teardownDom();
 });
+
+test("SwdRttPanel clear empties the log", () => {
+  makeDom(FRAGMENT);
+  const bus = new EventBus();
+  new SwdRttPanel({ bus, backendProvider: () => makeFakeBackend(), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  document.querySelector("#rtt-log").textContent = "some rtt data";
+  document.querySelector("#btn-rtt-clear").click();
+  assert.equal(document.querySelector("#rtt-log").textContent, "");
+  teardownDom();
+});
+
+test("SwdRttPanel download triggers URL.createObjectURL", async () => {
+  makeDom(FRAGMENT);
+  const rttClient = new FakeRttClient();
+  rttClient._upChannels.push({ pBuffer: 0, size: 256 });
+  let blobCreated = false;
+  globalThis.URL = { createObjectURL: () => { blobCreated = true; return "blob:fake"; }, revokeObjectURL: () => {} };
+
+  const bus = new EventBus();
+  new SwdRttPanel({ bus, backendProvider: () => makeFakeBackend({ rttSession: rttClient }), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+
+  document.querySelector("#btn-rtt-search").click();
+  await new Promise(r => setTimeout(r, 20));
+  document.querySelector("#btn-rtt-start").click();
+  await new Promise(r => setTimeout(r, 10));
+
+  document.querySelector("#btn-rtt-download").click();
+  assert.equal(blobCreated, true, "expected URL.createObjectURL called for download");
+  document.querySelector("#btn-rtt-stop").click();
+  teardownDom();
+});

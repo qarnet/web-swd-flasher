@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { makeDom, teardownDom } from "./helpers/dom.mjs";
 import { makeFakeBackend } from "./helpers/fake-backend.mjs";
 import { EventBus } from "../../src/core/event-bus.js";
+import { Topics } from "../../src/core/event-bus-topics.js";
 import { ReadRegionsStore } from "../../src/core/read-regions-store.js";
 import { SwdMemoryPanel } from "../../src/ui/panels/swd-memory-panel.js";
 
@@ -47,5 +48,55 @@ test("SwdMemoryPanel uses withQuietLog when backend supports it", async () => {
   document.querySelector("#btn-mem-read-flash").click();
   await new Promise(r => setTimeout(r, 50));
   assert.equal(quietCalled, true);
+  teardownDom();
+});
+
+test("SwdMemoryPanel read error shows in status", async () => {
+  makeDom(`<div id="root"><input id="mem-addr-input" value="0x1000"><input id="mem-len-input" value="16"><button id="btn-mem-read"></button><button id="btn-mem-read-flash"></button><button id="btn-mem-export"></button><button id="btn-mem-export-hex"></button><span id="mem-status"></span><pre id="mem-dump"></pre></div>`);
+  const bus = new EventBus();
+  const memAccess = { readBlockFast: async () => { throw new Error("AHB fault"); }, maxReadBlockWordCount: 256 };
+  new SwdMemoryPanel({ bus, readRegions: new ReadRegionsStore(bus), backendProvider: () => makeFakeBackend({ memoryAccess: memAccess }), logger: { log: () => {} } }).mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-mem-read").click();
+  await new Promise(r => setTimeout(r, 10));
+  const status = document.querySelector("#mem-status").textContent.toLowerCase();
+  assert.ok(status.includes("failed") || status.includes("ahb fault") || status.includes("error"), `status="${status}"`);
+  teardownDom();
+});
+
+test("SwdMemoryPanel export binary available after successful read", async () => {
+  makeDom(`<div id="root"><input id="mem-addr-input" value="0x1000"><input id="mem-len-input" value="16"><button id="btn-mem-read"></button><button id="btn-mem-read-flash"></button><button id="btn-mem-export"></button><button id="btn-mem-export-hex"></button><span id="mem-status"></span><pre id="mem-dump"></pre></div>`);
+  const bus = new EventBus();
+  let blobCreated = false;
+  globalThis.URL = { createObjectURL: (b) => { blobCreated = true; return "blob:fake"; }, revokeObjectURL: () => {} };
+  const memAccess = { readBlockFast: async () => new Uint32Array(4), maxReadBlockWordCount: 256 };
+  const panel = new SwdMemoryPanel({ bus, readRegions: new ReadRegionsStore(bus), backendProvider: () => makeFakeBackend({ memoryAccess: memAccess }), logger: { log: () => {} } });
+  panel.mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  // Read first, then export
+  document.querySelector("#btn-mem-read").click();
+  await new Promise(r => setTimeout(r, 20));
+  document.querySelector("#btn-mem-export").click();
+  assert.equal(blobCreated, true, "expected URL.createObjectURL to be called with a Blob");
+  teardownDom();
+});
+
+test("SwdMemoryPanel export hex available after successful read", async () => {
+  makeDom(`<div id="root"><input id="mem-addr-input" value="0x1000"><input id="mem-len-input" value="16"><button id="btn-mem-read"></button><button id="btn-mem-read-flash"></button><button id="btn-mem-export"></button><button id="btn-mem-export-hex"></button><span id="mem-status"></span><pre id="mem-dump"></pre></div>`);
+  const bus = new EventBus();
+  let blobCreated = false;
+  let blobContent = null;
+  globalThis.URL = {
+    createObjectURL: (b) => { blobCreated = true; blobContent = b; return "blob:fake"; },
+    revokeObjectURL: () => {}
+  };
+  const memAccess = { readBlockFast: async () => new Uint32Array(4), maxReadBlockWordCount: 256 };
+  const panel = new SwdMemoryPanel({ bus, readRegions: new ReadRegionsStore(bus), backendProvider: () => makeFakeBackend({ memoryAccess: memAccess }), logger: { log: () => {} } });
+  panel.mount(document.getElementById("root"));
+  bus.emit(Topics.BACKEND_CONNECTED, {});
+  document.querySelector("#btn-mem-read").click();
+  await new Promise(r => setTimeout(r, 20));
+  document.querySelector("#btn-mem-export-hex").click();
+  assert.equal(blobCreated, true, "expected URL.createObjectURL to be called for hex export");
   teardownDom();
 });
