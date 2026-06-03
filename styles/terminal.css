@@ -2,43 +2,103 @@
 .terminal-panel-grid {
   display: grid;
   grid-template-columns: 220px 1fr 240px;
-  gap: 0.5rem;
+  gap: 0;
   min-width: 0;
 }
 .terminal-panel-grid > .terminal-main { min-width: 0; }
-.terminal-panel-grid > h2,
-.terminal-panel-grid > .hint,
-.terminal-panel-grid > .status {
-  grid-column: 1 / -1;
+.terminal-panel-grid > .terminal-templates {
+  border-right: 1px solid var(--border);
+  padding-right: 0.5rem;
+}
+.terminal-panel-grid > .terminal-queue {
+  border-left: 1px solid var(--border);
+  padding-left: 0.5rem;
 }
 @media (max-width: 720px) {
   .terminal-panel-grid { grid-template-columns: 1fr; }
+  .terminal-panel-grid > .terminal-templates { border-right: none; padding-right: 0; }
+  .terminal-panel-grid > .terminal-queue { border-left: none; padding-left: 0; }
 }
 
-.btn-queue {
-  background: var(--border) !important;
-  color: var(--fg) !important;
-  border-color: var(--border) !important;
-}
-.btn-queue:not([disabled]):hover {
-  background: var(--muted) !important;
-}
-
-/* ===== Search bar ===== */
-.terminal-search {
+/* ===== Toolbar ===== */
+.terminal-toolbar {
   display: flex;
+  gap: 0.25rem;
+  padding: 0.15rem 0;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+}
+.toolbar-btn {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.toolbar-btn:hover,
+.toolbar-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ===== Overlay panels (settings + search) ===== */
+.terminal-overlay,
+.terminal-search {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  padding: 0.5rem;
+}
+
+.terminal-settings-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.tbar-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+.tbar-actions button {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+.tbar-checks {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.tbar-checks .checkbox-label {
+  font-size: 0.75rem;
+}
+
+/* ===== Search bar (overlay mode) ===== */
+.terminal-search {
+  display: none;
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: center;
-  padding: 0.25rem 0;
 }
 .terminal-search .search-query {
   flex: 0 0 140px;
   border: 1px solid var(--border);
-  background: var(--panel);
+  background: var(--bg);
   color: var(--fg);
   padding: 0.25rem 0.4rem;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 0.8rem;
 }
 .terminal-search .search-count {
@@ -48,35 +108,35 @@
   min-width: 50px;
 }
 .terminal-search button {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 6px;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
   white-space: nowrap;
 }
 .terminal-search label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 .terminal-search select {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   padding: 0.15rem 0.3rem;
   border: 1px solid var(--border);
-  background: var(--panel);
+  background: var(--bg);
   color: var(--fg);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 /* ===== Template sidebar ===== */
 .terminal-templates {
   font-size: 0.8rem;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 120px);
   min-width: 0;
 }
 .template-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.4rem;
-  margin-bottom: 0.35rem;
+  border-radius: 6px;
+  padding: 0.35rem;
+  margin-bottom: 0.3rem;
   background: var(--panel);
 }
 .template-card .tpl-header {
@@ -84,98 +144,99 @@
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
+  font-size: 0.75rem;
 }
 .template-card .tpl-header button {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.3rem;
-  border-radius: 4px;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
 }
 .template-card .tpl-var-row {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  margin: 0.15rem 0;
+  gap: 0.2rem;
+  margin: 0.1rem 0;
 }
 .template-card .tpl-var-row label {
-  font-size: 0.7rem;
-  min-width: 70px;
+  font-size: 0.65rem;
+  min-width: 60px;
 }
 .template-card .tpl-var-row input {
   flex: 1;
-  font-size: 0.75rem;
-  padding: 0.15rem 0.3rem;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.25rem;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--bg);
   color: var(--fg);
 }
 .template-card .tpl-var-row .unset-chip {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: var(--warn-fg);
   background: var(--warn-bg);
-  padding: 0.05rem 0.25rem;
-  border-radius: 4px;
+  padding: 0.05rem 0.2rem;
+  border-radius: 3px;
 }
 .template-card .tpl-actions {
   display: flex;
-  gap: 0.25rem;
-  margin-top: 0.3rem;
+  gap: 0.2rem;
+  margin-top: 0.25rem;
 }
 .template-card .tpl-actions button {
   flex: 1;
-  font-size: 0.7rem;
-  padding: 0.2rem 0.3rem;
-  border-radius: 4px;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 3px;
 }
 .template-edit-form {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.3rem;
+  gap: 0.25rem;
+  padding: 0.25rem;
 }
 .template-edit-form input,
 .template-edit-form textarea {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
   color: var(--fg);
-  padding: 0.2rem 0.3rem;
+  padding: 0.15rem 0.25rem;
 }
 .template-edit-form textarea {
-  min-height: 50px;
+  min-height: 40px;
   resize: vertical;
 }
 .template-edit-form .tpl-edit-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 .template-edit-form .tpl-edit-actions button {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.3rem;
-  border-radius: 4px;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 3px;
   flex: 1;
 }
 .template-new {
   width: 100%;
-  font-size: 0.75rem;
-  padding: 0.3rem;
-  border-radius: 6px;
-  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  margin-top: 0.2rem;
 }
 
 /* ===== Queue sidebar ===== */
 .terminal-queue {
   font-size: 0.8rem;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: calc(100vh - 120px);
 }
 .queue-item {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.4rem;
-  margin-bottom: 0.35rem;
+  border-radius: 6px;
+  padding: 0.35rem;
+  margin-bottom: 0.3rem;
   background: var(--panel);
 }
 .queue-item .q-item-header {
@@ -184,32 +245,32 @@
   align-items: center;
 }
 .queue-item .q-item-text {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   word-break: break-all;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 150px;
+  max-width: 140px;
 }
 .queue-item .q-item-delay {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  margin-top: 0.2rem;
-  font-size: 0.7rem;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
 }
 .queue-item .q-item-delay input {
-  width: 60px;
-  font-size: 0.7rem;
+  width: 55px;
+  font-size: 0.65rem;
   padding: 0.1rem 0.2rem;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--bg);
   color: var(--fg);
 }
 .queue-item .q-item-status {
-  font-size: 0.65rem;
-  margin-top: 0.15rem;
+  font-size: 0.6rem;
+  margin-top: 0.1rem;
 }
 .queue-item .q-item-status.status-running { color: var(--accent); }
 .queue-item .q-item-status.status-done { color: var(--muted); }
@@ -217,14 +278,14 @@
 .queue-item .q-item-status.status-pending { color: var(--muted); }
 .queue-actions {
   display: flex;
-  gap: 0.25rem;
-  margin-top: 0.35rem;
+  gap: 0.2rem;
+  margin-top: 0.3rem;
 }
 .queue-actions button {
   flex: 1;
-  font-size: 0.7rem;
-  padding: 0.2rem 0.3rem;
-  border-radius: 4px;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 3px;
 }
 
 /* ===== History popup ===== */
@@ -233,18 +294,18 @@
   z-index: 200;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   list-style: none;
   margin: 0;
-  padding: 0.25rem 0;
-  max-height: 200px;
+  padding: 0.2rem 0;
+  max-height: 180px;
   overflow-y: auto;
-  min-width: 200px;
+  min-width: 180px;
 }
 .history-popup li {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -268,26 +329,26 @@ mark.term-match-current {
   border-radius: 2px;
 }
 
-/* ===== Overflow menu ===== */
+/* ===== More menu ===== */
 .search-more {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.35rem;
 }
 .more-menu {
   position: absolute;
   z-index: 210;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   list-style: none;
   margin: 0;
-  padding: 0.25rem 0;
-  min-width: 180px;
+  padding: 0.2rem 0;
+  min-width: 160px;
 }
 .more-menu li {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 .more-menu li:hover {
@@ -298,6 +359,16 @@ mark.term-match-current {
 /* ===== Template inline error ===== */
 .tpl-error {
   color: #c23621;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   margin-top: 0.1rem;
+}
+
+/* ===== Queue button ===== */
+.btn-queue {
+  background: var(--border) !important;
+  color: var(--fg) !important;
+  border-color: var(--border) !important;
+}
+.btn-queue:not([disabled]):hover {
+  background: var(--muted) !important;
 }

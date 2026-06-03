@@ -195,12 +195,28 @@ export class TerminalController {
       main.appendChild(panelEl.children[0]);
     }
 
+    const h2 = main.querySelector("h2");
+    if (h2) h2.remove();
+
+    this._createToolbar(main);
+
     const searchBar = this._createSearchBar();
-    const logEl = this._view._rootEl;
-    if (logEl.parentNode === main) {
-      main.insertBefore(searchBar, logEl);
-    } else {
-      main.appendChild(searchBar);
+    main.appendChild(searchBar);
+
+    if (this._toolbarSearchBtn && searchBar) {
+      this._toolbarSearchBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (searchBar.style.display === "none") {
+          searchBar.style.display = "flex";
+          this._toolbarSearchBtn.classList.add("active");
+          this._toolbarSearchOverlay.style.display = "none";
+          const settingsBtn = this._toolbar.querySelector(".toolbar-settings");
+          if (settingsBtn) settingsBtn.classList.remove("active");
+        } else {
+          searchBar.style.display = "none";
+          this._toolbarSearchBtn.classList.remove("active");
+        }
+      });
     }
 
     panelEl.classList.add("terminal-panel-grid");
@@ -223,9 +239,126 @@ export class TerminalController {
     }
   }
 
+  _createToolbar(main) {
+    const bar = document.createElement("div");
+    bar.className = "terminal-toolbar";
+
+    const settingsBtn = document.createElement("button");
+    settingsBtn.className = "toolbar-btn toolbar-settings";
+    settingsBtn.textContent = "\u2699";
+    settingsBtn.title = "Settings";
+
+    const searchBtn = document.createElement("button");
+    searchBtn.className = "toolbar-btn toolbar-search-toggle";
+    searchBtn.textContent = "\u{1F50D}";
+    searchBtn.title = "Search";
+
+    bar.appendChild(searchBtn);
+    bar.appendChild(settingsBtn);
+
+    const overlay = document.createElement("div");
+    overlay.className = "terminal-overlay";
+    overlay.style.display = "none";
+
+    const settingsPanel = document.createElement("div");
+    settingsPanel.className = "terminal-settings-panel";
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "tbar-actions";
+    actionsRow.innerHTML = `
+      <button class="tbar-clear">Clear</button>
+      <button class="tbar-download">Download</button>
+    `;
+    settingsPanel.appendChild(actionsRow);
+
+    const checksRow = document.createElement("div");
+    checksRow.className = "tbar-checks";
+
+    const autoChk = main.querySelector("#chk-" + this._channelId + "-autoscroll");
+    const crChk = main.querySelector("#chk-" + this._channelId + "-cr-newline");
+    const echoChk = main.querySelector("#chk-" + this._channelId + "-echo");
+
+    const addCheck = (el, label) => {
+      if (!el) return;
+      const wrap = document.createElement("label");
+      wrap.className = "checkbox-label";
+      wrap.appendChild(el);
+      wrap.appendChild(document.createTextNode(" " + label));
+      checksRow.appendChild(wrap);
+    };
+    addCheck(autoChk, "Scroll");
+    addCheck(crChk, "CR→NL");
+    addCheck(echoChk, "Echo");
+    settingsPanel.appendChild(checksRow);
+
+    overlay.appendChild(settingsPanel);
+    bar.appendChild(overlay);
+
+    let openPanel = null;
+
+    const togglePanel = (panelEl, btn) => {
+      if (openPanel === panelEl) {
+        panelEl.style.display = "none";
+        btn.classList.remove("active");
+        openPanel = null;
+        return;
+      }
+      if (openPanel) {
+        openPanel.style.display = "none";
+        bar.querySelector(".toolbar-btn.active")?.classList.remove("active");
+      }
+      panelEl.style.display = "block";
+      btn.classList.add("active");
+      openPanel = panelEl;
+    };
+
+    settingsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      togglePanel(overlay, settingsBtn);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!bar.contains(e.target)) {
+        overlay.style.display = "none";
+        settingsBtn.classList.remove("active");
+        const searchOverlay = main.querySelector(".terminal-search-overlay");
+        if (searchOverlay) {
+          searchOverlay.style.display = "none";
+          searchBtn.classList.remove("active");
+        }
+        openPanel = null;
+      }
+    });
+
+    actionsRow.querySelector(".tbar-clear").addEventListener("click", () => {
+      this._buffer.clear();
+    });
+    actionsRow.querySelector(".tbar-download").addEventListener("click", () => {
+      const blob = new Blob([this._buffer.toPlainText()], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this._channelId}-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    this._toolbar = bar;
+    this._toolbarSearchBtn = searchBtn;
+    this._toolbarSearchOverlay = overlay;
+
+    const logEl = this._view._rootEl;
+    if (logEl.parentNode === main) {
+      main.insertBefore(bar, logEl);
+    }
+  }
+
   _createSearchBar() {
     const bar = document.createElement("div");
     bar.className = "terminal-search";
+    bar.style.display = "none";
     bar.setAttribute("role", "search");
     bar.innerHTML = `
       <input type="text" class="search-query" placeholder="Search log\u2026" />
@@ -299,6 +432,8 @@ export class TerminalController {
       this._applyFilterToAll();
       this._updateSearchCount(countEl);
       this._view.setAutoScroll(this._view._autoScroll);
+      bar.style.display = "none";
+      if (this._toolbarSearchBtn) this._toolbarSearchBtn.classList.remove("active");
     });
 
     moreBtn.addEventListener("click", (e) => {
