@@ -185,11 +185,12 @@ export class TerminalController {
     const templates = document.createElement("aside");
     templates.className = "terminal-templates";
     templates.dataset.channel = this._channelId;
-    templates.innerHTML = '<ul class="template-list"></ul><button class="template-new">+ New template</button>';
+    templates.innerHTML = '<div class="sidebar-title">Templates</div><ul class="template-list"></ul><button class="template-new">+ New template</button>';
     templates.querySelector(".template-new").addEventListener("click", () => this._showTemplateEditor());
 
     const queueEl = document.createElement("aside");
     queueEl.className = "terminal-queue";
+    queueEl.innerHTML = '<div class="sidebar-title">Command Queue</div>';
 
     while (panelEl.children.length > 0) {
       main.appendChild(panelEl.children[0]);
@@ -902,11 +903,15 @@ export class TerminalController {
     const items = this._queueRunner.getItems();
     const running = this._queueRunner.isRunning();
 
-    aside.innerHTML = `
+    const body = document.createElement("div");
+    body.innerHTML = `
       <button class="template-new q-send-queue">${running ? "Resume Queue" : "Send Queue"}</button>
       <button class="template-new q-stop-queue" ${!running ? "disabled" : ""}>Stop</button>
       <button class="template-new q-clear-queue" ${running ? "disabled" : ""}>Clear</button>
     `;
+
+    const title = aside.querySelector(".sidebar-title");
+    aside.replaceChildren(title, body);
 
     for (const item of items) {
       const card = document.createElement("div");

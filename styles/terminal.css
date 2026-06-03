@@ -5,18 +5,19 @@
   gap: 0;
   min-width: 0;
 }
+.terminal-panel-grid[hidden] { display: none !important; }
 .terminal-panel-grid > .terminal-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 .terminal-panel-grid > .terminal-templates {
-  border-right: 1px solid var(--border);
-  padding-right: 0.5rem;
+  background: var(--bg);
+  padding: 0.3rem 0.5rem;
 }
 .terminal-panel-grid > .terminal-queue {
-  border-left: 1px solid var(--border);
-  padding-left: 0.5rem;
+  background: var(--bg);
+  padding: 0.3rem 0.5rem;
 }
 .terminal-fullscreen {
   position: fixed !important;
@@ -37,6 +38,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.terminal-fullscreen > .terminal-templates,
+.terminal-fullscreen > .terminal-queue {
+  max-height: none;
+  overflow-y: auto;
 }
 .terminal-fullscreen .log {
   flex: 1;
@@ -178,6 +184,40 @@
   font-size: 0.8rem;
   overflow-y: auto;
   max-height: calc(100vh - 120px);
+  min-width: 0;
+}
+.sidebar-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.2rem 0 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.template-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.template-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem;
+  margin-bottom: 0.3rem;
+  background: var(--panel);
+}
+.template-card .tpl-var-row input {
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg);
   min-width: 0;
 }
 .template-card {
