@@ -2,6 +2,7 @@ import { Topics } from "../../core/event-bus-topics.js";
 import { TerminalBuffer } from "../terminal-buffer.js";
 import { TerminalView } from "../terminal-view.js";
 import { downloadLog } from "../log-panel-helpers.js";
+import { TerminalController } from "../components/terminal-controller.js";
 import { BasePanel } from "./base-panel.js";
 
 const CR_KEY = "terminal:cr-as-newline:serial";
@@ -14,6 +15,7 @@ export class SerialTerminalPanel extends BasePanel {
     this._els = null;
     this._buffer = null;
     this._view = null;
+    this._controller = null;
     this._firstChunk = true;
   }
 
@@ -41,13 +43,26 @@ export class SerialTerminalPanel extends BasePanel {
     });
     this._firstChunk = true;
 
+    this._controller = new TerminalController({
+      root: rootEl,
+      inputEl: this._els.txInput,
+      sendBtnEl: this._els.btnSend,
+      buffer: this._buffer,
+      view: this._view,
+      channelId: "serial",
+      send: async (text) => {
+        await this._serialManager.send(new TextEncoder().encode(text + "\r\n"));
+      },
+      isReady: () => this._serialManager.connected,
+      logger: { log: (msg) => this._bus.emit(Topics.LOG_LINE, { source: "serial", level: "error", message: msg }) },
+    });
+
     this._bindBusListener(this._bus, Topics.SERIAL_DATA, ({ bytes }) => {
       if (this._firstChunk) { this._firstChunk = false; this._buffer.appendString("\n"); }
       this._buffer.append(bytes);
     });
     this._bindBusListener(this._bus, Topics.SERIAL_CONNECTED, () => { this._firstChunk = true; });
 
-    this._bindDomListener(this._els.btnSend, "click", this._onSend);
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);
     this._bindDomListener(this._els.chkAutoScroll, "change", () => {
@@ -63,20 +78,11 @@ export class SerialTerminalPanel extends BasePanel {
   unmount() {
     if (!this._els) return;
     this._teardown();
+    if (this._controller) { this._controller.destroy(); this._controller = null; }
     if (this._view) { this._view.destroy(); this._view = null; }
     this._buffer = null;
     this._els = null;
   }
-
-  _onSend = () => {
-    const text = this._els.txInput.value;
-    if (!text || !this._serialManager.connected) return;
-    this._serialManager.send(new TextEncoder().encode(text + "\r\n"))
-      .then(() => { this._els.txInput.value = ""; })
-      .catch(err => {
-        this._bus.emit(Topics.LOG_LINE, { source: "serial", level: "error", message: `Serial send failed: ${err.message}` });
-      });
-  };
 
   _onClear = () => { this._buffer.clear(); this._firstChunk = true; };
   _onDownload = () => { downloadLog(this._buffer.toPlainText(), `serial-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`); };

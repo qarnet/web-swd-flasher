@@ -12,6 +12,7 @@ const FRAGMENT = `<div id="root">
   <button id="btn-rtt-clear">Clear</button><button id="btn-rtt-download" disabled>Download</button>
   <input id="chk-rtt-autoscroll" type="checkbox" checked>
   <input id="chk-rtt-cr-newline" type="checkbox" checked>
+  <input id="chk-rtt-echo" type="checkbox" checked>
   <p id="rtt-status"></p><pre id="rtt-log"></pre>
   <input id="rtt-tx-input" disabled><button id="btn-rtt-send" disabled>Send</button>
 </div>`;

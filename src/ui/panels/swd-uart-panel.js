@@ -3,6 +3,7 @@ import { TerminalBuffer } from "../terminal-buffer.js";
 import { TerminalView } from "../terminal-view.js";
 import { downloadLog } from "../log-panel-helpers.js";
 import { persistInput } from "../components/persist-input.js";
+import { TerminalController } from "../components/terminal-controller.js";
 import { BasePanel } from "../panels/base-panel.js";
 import { DapUartSession } from "../../backends/cmsis-dap/dap-uart.js";
 
@@ -18,6 +19,7 @@ export class SwdUartPanel extends BasePanel {
     this._uart = null;
     this._buffer = null;
     this._view = null;
+    this._controller = null;
   }
 
   mount(rootEl) {
@@ -46,13 +48,28 @@ export class SwdUartPanel extends BasePanel {
       rootEl: this._els.log,
       autoScroll: this._els.chkAutoScroll.checked,
     });
+
+    this._controller = new TerminalController({
+      root: rootEl,
+      inputEl: this._els.txInput,
+      sendBtnEl: this._els.btnSend,
+      buffer: this._buffer,
+      view: this._view,
+      channelId: "uart",
+      send: async (text) => {
+        if (!this._uart) throw new Error("UART not connected");
+        await this._uart.send(new TextEncoder().encode(text + "\r\n"));
+      },
+      isReady: () => this._uart != null,
+      logger: { log: (msg) => this._logger.log(msg) },
+    });
+
     persistInput(this._els.baudSelect, "uart-baud");
 
     this._bindDomListener(this._els.btnConnect, "click", this._onConnect);
     this._bindDomListener(this._els.btnDisconnect, "click", this._onDisconnect);
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);
-    this._bindDomListener(this._els.btnSend, "click", this._onSend);
     this._bindDomListener(this._els.chkAutoScroll, "change", () => {
       this._view.setAutoScroll(this._els.chkAutoScroll.checked);
     });
@@ -79,6 +96,7 @@ export class SwdUartPanel extends BasePanel {
     if (!this._els) return;
     this._disconnectUart();
     this._teardown();
+    if (this._controller) { this._controller.destroy(); this._controller = null; }
     if (this._view) { this._view.destroy(); this._view = null; }
     this._buffer = null;
     this._els = null;
@@ -134,16 +152,4 @@ export class SwdUartPanel extends BasePanel {
 
   _onClear = () => { this._buffer.clear(); };
   _onDownload = () => { downloadLog(this._buffer.toPlainText(), `uart-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`); };
-
-  _onSend = async () => {
-    if (!this._uart) return;
-    const text = this._els.txInput.value;
-    if (!text) return;
-    try {
-      await this._uart.send(new TextEncoder().encode(text + "\r\n"));
-      this._els.txInput.value = "";
-    } catch (err) {
-      this._logger.log(`DAP UART send failed: ${err.message}`);
-    }
-  };
 }

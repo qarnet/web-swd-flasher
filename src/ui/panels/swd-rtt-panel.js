@@ -4,6 +4,7 @@ import { TerminalBuffer } from "../terminal-buffer.js";
 import { TerminalView } from "../terminal-view.js";
 import { downloadLog } from "../log-panel-helpers.js";
 import { persistInput } from "../components/persist-input.js";
+import { TerminalController } from "../components/terminal-controller.js";
 import { BasePanel } from "./base-panel.js";
 
 const CR_KEY = "terminal:cr-as-newline:rtt";
@@ -18,6 +19,7 @@ export class SwdRttPanel extends BasePanel {
     this._rttClient = null;
     this._buffer = null;
     this._view = null;
+    this._controller = null;
   }
 
   mount(rootEl) {
@@ -49,6 +51,22 @@ export class SwdRttPanel extends BasePanel {
       rootEl: this._els.log,
       autoScroll: this._els.chkAutoScroll.checked,
     });
+
+    this._controller = new TerminalController({
+      root: rootEl,
+      inputEl: this._els.txInput,
+      sendBtnEl: this._els.btnSend,
+      buffer: this._buffer,
+      view: this._view,
+      channelId: "rtt",
+      send: async (text) => {
+        if (!this._rttClient) throw new Error("RTT not connected");
+        await this._rttClient.write(0, new TextEncoder().encode(text + "\n"));
+      },
+      isReady: () => this._rttClient != null && this._rttClient.downChannelCount > 0,
+      logger: { log: (msg) => this._els.status && (this._els.status.textContent = msg) },
+    });
+
     persistInput(this._els.ramStartInput, "rtt-ram-start");
     persistInput(this._els.ramSizeInput, "rtt-ram-size");
     persistInput(this._els.intervalInput, "rtt-interval");
@@ -58,7 +76,6 @@ export class SwdRttPanel extends BasePanel {
     this._bindDomListener(this._els.btnStop, "click", this._onStop);
     this._bindDomListener(this._els.btnClear, "click", this._onClear);
     this._bindDomListener(this._els.btnDownload, "click", this._onDownload);
-    this._bindDomListener(this._els.btnSend, "click", this._onSend);
     this._bindDomListener(this._els.chkAutoScroll, "change", () => {
       this._view.setAutoScroll(this._els.chkAutoScroll.checked);
     });
@@ -87,6 +104,7 @@ export class SwdRttPanel extends BasePanel {
   unmount() {
     if (!this._els) return;
     this._teardown();
+    if (this._controller) { this._controller.destroy(); this._controller = null; }
     if (this._view) { this._view.destroy(); this._view = null; }
     this._buffer = null;
     this._els = null;
@@ -165,16 +183,4 @@ export class SwdRttPanel extends BasePanel {
 
   _onClear = () => { this._buffer.clear(); };
   _onDownload = () => { downloadLog(this._buffer.toPlainText(), `rtt-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`); };
-
-  _onSend = async () => {
-    if (!this._rttClient) return;
-    const text = this._els.txInput.value;
-    if (!text) return;
-    try {
-      await this._rttClient.write(0, new TextEncoder().encode(text + "\n"));
-      this._els.txInput.value = "";
-    } catch (error) {
-      this._els.status.textContent = `Send failed: ${normalizeError(error).message}`;
-    }
-  };
 }

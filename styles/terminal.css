@@ -1,0 +1,288 @@
+/* ===== Terminal panel grid ===== */
+.terminal-panel-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.terminal-panel-grid > .terminal-main { min-width: 0; }
+@media (max-width: 720px) {
+  .terminal-panel-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Search bar ===== */
+.terminal-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.25rem 0;
+}
+.terminal-search .search-query {
+  flex: 0 0 140px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.terminal-search .search-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+}
+.terminal-search button {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.terminal-search label {
+  font-size: 0.75rem;
+}
+.terminal-search select {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  border-radius: 6px;
+}
+
+/* ===== Template sidebar ===== */
+.terminal-templates {
+  font-size: 0.8rem;
+  overflow-y: auto;
+  max-height: 400px;
+}
+.template-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem;
+  margin-bottom: 0.35rem;
+  background: var(--panel);
+}
+.template-card .tpl-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+.template-card .tpl-header button {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+.template-card .tpl-var-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.15rem 0;
+}
+.template-card .tpl-var-row label {
+  font-size: 0.7rem;
+  min-width: 70px;
+}
+.template-card .tpl-var-row input {
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.template-card .tpl-var-row .unset-chip {
+  font-size: 0.65rem;
+  color: var(--warn-fg);
+  background: var(--warn-bg);
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+}
+.template-card .tpl-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+}
+.template-card .tpl-actions button {
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+}
+.template-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.3rem;
+}
+.template-edit-form input,
+.template-edit-form textarea {
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0.2rem 0.3rem;
+}
+.template-edit-form textarea {
+  min-height: 50px;
+  resize: vertical;
+}
+.template-edit-form .tpl-edit-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+.template-edit-form .tpl-edit-actions button {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  flex: 1;
+}
+.template-new {
+  width: 100%;
+  font-size: 0.75rem;
+  padding: 0.3rem;
+  border-radius: 6px;
+  margin-top: 0.25rem;
+}
+
+/* ===== Queue sidebar ===== */
+.terminal-queue {
+  font-size: 0.8rem;
+  overflow-y: auto;
+  max-height: 400px;
+}
+.queue-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem;
+  margin-bottom: 0.35rem;
+  background: var(--panel);
+}
+.queue-item .q-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.queue-item .q-item-text {
+  font-size: 0.75rem;
+  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.queue-item .q-item-delay {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+}
+.queue-item .q-item-delay input {
+  width: 60px;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.queue-item .q-item-status {
+  font-size: 0.65rem;
+  margin-top: 0.15rem;
+}
+.queue-item .q-item-status.status-running { color: var(--accent); }
+.queue-item .q-item-status.status-done { color: var(--muted); }
+.queue-item .q-item-status.status-failed { color: #c23621; }
+.queue-item .q-item-status.status-pending { color: var(--muted); }
+.queue-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+.queue-actions button {
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+}
+
+/* ===== History popup ===== */
+.history-popup {
+  position: absolute;
+  z-index: 200;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  max-height: 200px;
+  overflow-y: auto;
+  min-width: 200px;
+}
+.history-popup li {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-popup li:hover,
+.history-popup li[aria-selected="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ===== Match highlight ===== */
+mark.term-match {
+  background: var(--warn-bg);
+  color: var(--fg);
+  border-radius: 2px;
+}
+mark.term-match-current {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 2px;
+}
+
+/* ===== Overflow menu ===== */
+.search-more {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+}
+.more-menu {
+  position: absolute;
+  z-index: 210;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  min-width: 180px;
+}
+.more-menu li {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.more-menu li:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ===== Template inline error ===== */
+.tpl-error {
+  color: #c23621;
+  font-size: 0.7rem;
+  margin-top: 0.1rem;
+}
