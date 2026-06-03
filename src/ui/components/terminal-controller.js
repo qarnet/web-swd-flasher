@@ -344,13 +344,26 @@ export class TerminalController {
     panel.className = "terminal-dropdown";
     panel.style.display = "none";
 
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "dd-close";
+    closeBtn.textContent = "\u2715";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.style.display = "none";
+      this._toolbarCloseAll?.();
+    });
+    panel.appendChild(closeBtn);
+
+    const row = document.createElement("div");
+    row.className = "dd-row";
+
     const actions = document.createElement("div");
     actions.className = "dd-actions";
     actions.innerHTML = `
       <button class="dd-clear">Clear Log</button>
       <button class="dd-download">Download Log</button>
     `;
-    panel.appendChild(actions);
+    row.appendChild(actions);
 
     const checks = document.createElement("div");
     checks.className = "dd-checks";
@@ -368,10 +381,11 @@ export class TerminalController {
       wrap.appendChild(document.createTextNode(" " + label));
       checks.appendChild(wrap);
     };
-    addChk(autoChk, "Scroll");
-    addChk(crChk, "CR→NL");
-    addChk(echoChk, "Echo");
-    panel.appendChild(checks);
+    addChk(autoChk, "Auto-scroll");
+    addChk(crChk, "Treat CR as newline");
+    addChk(echoChk, "Local echo");
+    row.appendChild(checks);
+    panel.appendChild(row);
 
     actions.querySelector(".dd-clear").addEventListener("click", () => this._buffer.clear());
     actions.querySelector(".dd-download").addEventListener("click", () => {
@@ -393,6 +407,16 @@ export class TerminalController {
     const panel = document.createElement("div");
     panel.className = "terminal-dropdown terminal-search-panel";
     panel.style.display = "none";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "dd-close";
+    closeBtn.textContent = "\u2715";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.style.display = "none";
+      this._toolbarCloseAll?.();
+    });
+    panel.appendChild(closeBtn);
 
     const bar = document.createElement("div");
     bar.className = "search-inline";
@@ -423,7 +447,7 @@ export class TerminalController {
     const countEl = bar.querySelector(".search-count");
     const prevBtn = bar.querySelector(".search-prev");
     const nextBtn = bar.querySelector(".search-next");
-    const closeBtn = bar.querySelector(".search-close");
+    const searchCloseBtn = bar.querySelector(".search-close");
     const moreBtn = bar.querySelector(".search-more");
     const moreMenu = bar.querySelector(".more-menu");
     const clearHistoryItem = bar.querySelector(".more-clear-history");
@@ -458,7 +482,7 @@ export class TerminalController {
       this._updateSearchCount(countEl);
     });
 
-    closeBtn.addEventListener("click", () => {
+    searchCloseBtn.addEventListener("click", () => {
       this._searchIndex.setQuery("", "plain");
       queryInput.value = "";
       regexChk.checked = false;
@@ -484,7 +508,7 @@ export class TerminalController {
     });
 
     queryInput.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeBtn.click();
+      if (e.key === "Escape") searchCloseBtn.click();
     });
 
     panel.addEventListener("mousedown", (e) => e.stopPropagation());

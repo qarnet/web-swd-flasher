@@ -116,18 +116,32 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   padding: 0.5rem;
 }
+.dd-close {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+  line-height: 1;
+}
+.dd-close:hover { background: var(--border); color: var(--fg); }
 .terminal-search-panel {
   /* full width already */
 }
-.dd-actions {
+.dd-row {
   display: flex;
-  gap: 0.3rem;
-  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
 }
 .dd-actions button {
-  flex: 1;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 4px;
 }
 .dd-checks {
@@ -137,7 +151,7 @@
   align-items: center;
 }
 .dd-checks .checkbox-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
 
 /* ===== Search inline (inside dropdown) ===== */
