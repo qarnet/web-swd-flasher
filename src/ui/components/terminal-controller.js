@@ -198,13 +198,14 @@ export class TerminalController {
 
     const h2 = main.querySelector("h2");
     if (h2) h2.remove();
+    const hints = main.querySelectorAll(".hint");
+    hints.forEach(h => h.remove());
 
     const rows = main.querySelectorAll(".row");
     for (const row of rows) {
-      const hasClear = row.querySelector('[id$="clear" i], .tbar-clear, [id*="clear" i]');
-      const hasDownload = row.querySelector('[id$="download" i], [id*="download" i]');
       const hasChecks = row.querySelector('input[type="checkbox"]');
-      if ((hasClear || hasDownload) && hasChecks) {
+      const hasTransport = row.querySelector('[id$="-connect" i], [id$="-disconnect" i], [id$="-search" i], [id$="-start" i], [id$="-stop" i]');
+      if (hasChecks && !hasTransport) {
         row.style.display = "none";
       }
     }
@@ -236,6 +237,7 @@ export class TerminalController {
   _collapseEventLog(panelEl) {
     const eventLogPanel = panelEl.parentElement?.querySelector("#event-log-panel, #serial-event-log-panel");
     if (!eventLogPanel) return;
+    if (eventLogPanel.querySelector(".event-log-toggle")) return;
     const h2 = eventLogPanel.querySelector("h2");
     if (!h2) return;
 
