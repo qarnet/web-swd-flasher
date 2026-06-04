@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: cd tools && npm ci --ignore-scripts
+      - run: cd tools && npm install --ignore-scripts
       - run: cd tools && npm test
 
   browser:
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - run: cd tools && npm ci
+      - run: cd tools && npm install
       - run: python3 -m http.server 8000 &
       - run: sleep 2 && cd tools && BACKEND=mock HEADLESS=1 APP_URL=http://localhost:8000 node browser-tests.mjs
 
