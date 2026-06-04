@@ -12,8 +12,47 @@ import {
   setVarValue,
   resolve,
   subscribe as subscribeTemplates,
+  importTemplates,
 } from "./terminal-template-store.js";
 import { QueueRunner } from "./terminal-queue-runner.js";
+
+// ── Shared queue store ──────────────────────────────────────────────────────
+// All terminal controller instances share one queue, persisted under a single
+// key. A module-level pub/sub notifies peer instances when one changes it.
+const _SHARED_QUEUE_KEY = "terminal:queue";
+let _queueListeners = new Set();
+// Set while a controller is reloading queue from external source, to
+// prevent that controller's "change" handler from re-persisting/re-dispatching.
+let _reloadingFromExternal = false;
+
+function _subscribeQueueChange(cb) {
+  _queueListeners.add(cb);
+  return () => _queueListeners.delete(cb);
+}
+
+function _dispatchQueueChange() {
+  for (const cb of _queueListeners) try { cb(); } catch {}
+}
+
+function _loadSharedQueue() {
+  try {
+    const raw = localStorage.getItem(_SHARED_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function _saveSharedQueue(items) {
+  const slim = items.map(({ id, text, delayMs }) => ({ id, text, delayMs }));
+  if (slim.length === 0) { localStorage.removeItem(_SHARED_QUEUE_KEY); }
+  else { localStorage.setItem(_SHARED_QUEUE_KEY, JSON.stringify(slim)); }
+}
+
+// Cross-tab sync — storage events fire in OTHER tabs only
+window.addEventListener("storage", (e) => {
+  if (e.key === _SHARED_QUEUE_KEY) _dispatchQueueChange();
+});
 import { SearchIndex } from "./terminal-search-index.js";
 import {
   highlightMatches,
@@ -66,8 +105,19 @@ export class TerminalController {
         await this._send(text);
       },
     });
-    this._restoreQueue();
-    this._queueRunner.on("change", () => this._persistQueue());
+    this._queueRunner.setItems(_loadSharedQueue());
+    this._queueRunner.on("change", () => {
+      if (!_reloadingFromExternal) {
+        _saveSharedQueue(this._queueRunner.getItems());
+        _dispatchQueueChange();
+      }
+    });
+    this._queueUnsub = _subscribeQueueChange(() => {
+      _reloadingFromExternal = true;
+      this._queueRunner.setItems(_loadSharedQueue());
+      _reloadingFromExternal = false;
+      this._renderQueue();
+    });
     this._queueRunner.on("itemSent", (item) => {
       pushHistory(item.text);
       if (this._echoEnabled) {
@@ -165,6 +215,7 @@ export class TerminalController {
     document.removeEventListener("click", this._onDocClick);
     this._historyUnsub?.();
     this._templatesUnsub?.();
+    this._queueUnsub?.();
     this._queueRunner.stop();
     this._searchIndex?.destroy();
     this._unwrapLayout();
@@ -628,25 +679,6 @@ export class TerminalController {
     } catch {}
   }
 
-  _persistQueue() {
-    const items = this._queueRunner.getItems();
-    if (items.length === 0) {
-      localStorage.removeItem(`terminal:queue:${this._channelId}`);
-    } else {
-      localStorage.setItem(`terminal:queue:${this._channelId}`, JSON.stringify(items));
-    }
-  }
-
-  _restoreQueue() {
-    try {
-      const raw = localStorage.getItem(`terminal:queue:${this._channelId}`);
-      if (raw) {
-        const items = JSON.parse(raw);
-        if (Array.isArray(items)) this._queueRunner.setItems(items);
-      }
-    } catch {}
-  }
-
   _onSendClick() {
     if (this._queueRunner.isRunning()) return;
     this._performSend(this._inputEl.value);
@@ -994,7 +1026,62 @@ export class TerminalController {
       }
     });
 
+    // Import / Export row
+    const ioRow = document.createElement("div");
+    ioRow.className = "queue-actions q-io-row";
+    ioRow.innerHTML = `<button class="q-export" title="Export templates + queue to JSON file">Export</button><button class="q-import" title="Import templates + queue from JSON file">Import</button>`;
+    aside.appendChild(ioRow);
+
+    aside.querySelector(".q-export").addEventListener("click", () => this._exportConfig());
+    aside.querySelector(".q-import").addEventListener("click", () => this._importConfig());
+
     this._updateSendBtn();
+  }
+
+  _exportConfig() {
+    const templates = getTemplates();
+    const queue = this._queueRunner.getItems().map(({ id, text, delayMs }) => ({ id, text, delayMs }));
+    const json = JSON.stringify({ version: 1, templates, queue }, null, 2);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = `terminal-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  _importConfig() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data || typeof data !== "object") throw new Error("Not a valid config file");
+
+        let msg = [];
+
+        if (Array.isArray(data.templates)) {
+          const { added, skipped } = importTemplates(data.templates);
+          msg.push(`Templates: ${added} added, ${skipped} skipped`);
+        }
+
+        if (Array.isArray(data.queue)) {
+          this._queueRunner.setItems(data.queue);
+          _saveSharedQueue(this._queueRunner.getItems());
+          _dispatchQueueChange();
+          msg.push(`Queue: ${data.queue.length} item(s) loaded`);
+        }
+
+        if (msg.length === 0) throw new Error("No templates or queue found in file");
+        alert(msg.join("\n"));
+      } catch (err) {
+        alert(`Import failed: ${err.message}`);
+      }
+    });
+    input.click();
   }
 
   _updateSendBtn() {

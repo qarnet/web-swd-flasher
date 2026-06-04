@@ -11,12 +11,13 @@ import { SwdRecoveryPanel } from "./ui/panels/swd-recovery-panel.js";
 import { SwdUicrPanel } from "./ui/panels/swd-uicr-panel.js";
 import { SwdDebugPanel } from "./ui/panels/swd-debug-panel.js";
 import { SwdMemoryPanel } from "./ui/panels/swd-memory-panel.js";
-import { SwdRttPanel } from "./ui/panels/swd-rtt-panel.js";
-import { SwdUartPanel } from "./ui/panels/swd-uart-panel.js";
 import { SwdFirmwarePanel } from "./ui/panels/swd-firmware-panel.js";
 import { SwdConnectionPanel } from "./ui/panels/swd-connection-panel.js";
 import { SerialConnectionPanel } from "./ui/panels/serial-connection-panel.js";
-import { SerialTerminalPanel } from "./ui/panels/serial-terminal-panel.js";
+import { UnifiedTerminalPanel } from "./ui/panels/unified-terminal-panel.js";
+import { RttSession } from "./ui/terminals/rtt-session.js";
+import { DapUartTerminalSession } from "./ui/terminals/dap-uart-session.js";
+import { SerialSession } from "./ui/terminals/serial-session.js";
 import { createPanelLogger } from "./ui/components/panel-logger.js";
 import { TabController, ModeController } from "./ui/components/tab-controller.js";
 import { renderBuildTimestamp } from "./ui/components/topbar-build-badge.js";
@@ -118,16 +119,25 @@ async function init() {
   const uicrPanel = new SwdUicrPanel({ bus, backendProvider, logger });
   uicrPanel.mount(document.getElementById("tab-uicr"));
 
-  const rttPanel = new SwdRttPanel({ bus, backendProvider, logger });
+  const rttPanel = new UnifiedTerminalPanel({
+    session: new RttSession({ backendProvider }),
+    bus, backendProvider, logger,
+  });
   rttPanel.mount(document.getElementById("tab-rtt"));
 
-  const uartPanel = new SwdUartPanel({ bus, backendProvider, logger });
+  const uartPanel = new UnifiedTerminalPanel({
+    session: new DapUartTerminalSession({ backendProvider, logger }),
+    bus, backendProvider, logger,
+  });
   uartPanel.mount(document.getElementById("tab-uart"));
 
   const serialConnectionPanel = new SerialConnectionPanel({ bus, serialManager });
   serialConnectionPanel.mount(document.getElementById("serial-conn-controls"));
 
-  const serialTerminalPanel = new SerialTerminalPanel({ bus, serialManager });
+  const serialTerminalPanel = new UnifiedTerminalPanel({
+    session: new SerialSession({ serialManager }),
+    bus, backendProvider, logger,
+  });
   serialTerminalPanel.mount(document.getElementById("serial-terminal-panel"));
 
   navigator.serial?.addEventListener("disconnect", (e) => {

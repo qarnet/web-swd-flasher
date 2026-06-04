@@ -164,3 +164,22 @@ export function subscribe(cb) {
   _ensureStorage();
   return () => { _listeners.delete(cb); };
 }
+
+/**
+ * Import templates from a parsed array. Skips duplicates by name.
+ * @param {Array} incoming
+ * @returns {{ added: number, skipped: number, errors: string[] }}
+ */
+export function importTemplates(incoming) {
+  if (!Array.isArray(incoming)) return { added: 0, skipped: 0, errors: ["Not an array"] };
+  let added = 0; let skipped = 0; const errors = [];
+  for (const tpl of incoming) {
+    if (!tpl || typeof tpl.name !== "string" || typeof tpl.body !== "string") {
+      errors.push(`Skipped invalid entry: ${JSON.stringify(tpl)?.slice(0, 40)}`); skipped++; continue;
+    }
+    const { id: _id, ...rest } = tpl;
+    const result = saveTemplate({ ...rest });
+    if (result.ok) { added++; } else { skipped++; if (result.reason !== "Duplicate name") errors.push(result.reason); }
+  }
+  return { added, skipped, errors };
+}
