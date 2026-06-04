@@ -4,8 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Web SWD Flasher</title>
+    <meta name="description" content="Browser-based SWD debugger and firmware flasher for nRF52 and other ARM Cortex-M targets." />
+    <meta name="theme-color" content="#2c6e49" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SWD Flasher" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+    <link rel="apple-touch-icon" href="icons/icon.svg" />
     <script>!function(){var t=localStorage.getItem("theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}();</script>
     <link rel="stylesheet" href="styles/base.css" />
+    <link rel="stylesheet" href="styles/terminal.css" />
   </head>
   <body>
     <div class="topbar">
@@ -16,10 +26,52 @@
       <button class="btn-icon" id="btn-theme" type="button" title="Toggle dark mode">🌙</button>
     </div>
 
-    <!-- Top-level section switcher -->
+    <!-- Top-level section switcher + inline connection controls -->
     <nav class="mode-bar" role="tablist">
       <button class="mode-btn active" role="tab" data-mode="swd">SWD Programmer</button>
       <button class="mode-btn" role="tab" data-mode="serial">Serial Terminal</button>
+      <div id="connection-bar">
+        <div id="swd-conn-controls">
+          <select id="backend-select">
+            <option value="cmsis-dap" selected>CMSIS-DAP</option>
+            <option value="mock">Mock (simulated)</option>
+            <option value="jlink-webusb" hidden>J-Link WebUSB</option>
+          </select>
+          <select id="clock-select">
+            <option value="100000">100 kHz</option>
+            <option value="500000">500 kHz</option>
+            <option value="1000000" selected>1 MHz</option>
+            <option value="2000000">2 MHz</option>
+            <option value="4000000">4 MHz</option>
+          </select>
+          <button id="btn-connect" type="button">Connect Probe</button>
+          <button id="btn-disconnect" type="button" disabled>Disconnect</button>
+          <select id="target-select" disabled>
+            <option value="auto">Auto-detect</option>
+          </select>
+          <span id="status" class="conn-status">Idle</span>
+          <div class="progress-bar" id="progress-bar" hidden>
+            <div class="progress-bar-fill" id="progress-fill"></div>
+          </div>
+          <pre id="target-info" class="log" hidden></pre>
+          <pre id="probe-caps" class="log" hidden></pre>
+        </div>
+        <div id="serial-conn-controls" hidden>
+          <select id="serial-baud-select">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+          <button id="btn-serial-connect" type="button">Connect Serial Port</button>
+          <button id="btn-serial-disconnect" type="button" disabled>Disconnect</button>
+          <span id="serial-status" class="conn-status">Not connected</span>
+        </div>
+      </div>
     </nav>
 
     <!-- ========== SWD Programmer Section ========== -->
@@ -31,47 +83,14 @@
       </section>
 
       <nav class="tab-bar" role="tablist">
-        <button class="tab-btn active" role="tab" data-tab="connection">Connection</button>
+        <button class="tab-btn active" role="tab" data-tab="firmware">Firmware Image</button>
         <button class="tab-btn" role="tab" data-tab="recovery">Device Recovery</button>
-        <button class="tab-btn" role="tab" data-tab="firmware">Firmware Image</button>
         <button class="tab-btn" role="tab" data-tab="debug">Debug</button>
         <button class="tab-btn" role="tab" data-tab="memory">Memory Read</button>
         <button class="tab-btn" role="tab" data-tab="uicr">UICR</button>
         <button class="tab-btn" role="tab" data-tab="rtt">RTT</button>
+        <button class="tab-btn" role="tab" data-tab="uart">DAP UART</button>
       </nav>
-
-      <!-- Connection -->
-      <section id="tab-connection" class="panel tab-panel">
-        <h2>Connection</h2>
-        <div class="row">
-          <label for="backend-select">Backend</label>
-          <select id="backend-select">
-            <option value="cmsis-dap" selected>CMSIS-DAP</option>
-          </select>
-          <label for="clock-select">SWD Clock</label>
-          <select id="clock-select">
-            <option value="100000">100 kHz</option>
-            <option value="500000">500 kHz</option>
-            <option value="1000000" selected>1 MHz</option>
-            <option value="2000000">2 MHz</option>
-            <option value="4000000">4 MHz</option>
-          </select>
-          <button id="btn-connect" type="button">Connect Probe</button>
-          <button id="btn-disconnect" type="button" disabled>Disconnect</button>
-        </div>
-        <div class="row">
-          <label for="target-select">Target</label>
-          <select id="target-select" disabled>
-            <option value="auto">Auto-detect</option>
-          </select>
-        </div>
-        <div class="progress-bar" id="progress-bar" hidden>
-          <div class="progress-bar-fill" id="progress-fill"></div>
-        </div>
-        <p id="status" class="status">Idle</p>
-        <pre id="target-info" class="log" hidden></pre>
-        <pre id="probe-caps" class="log" hidden></pre>
-      </section>
 
       <!-- Device Recovery -->
       <section id="tab-recovery" class="panel tab-panel" hidden>
@@ -191,12 +210,48 @@
           <button id="btn-rtt-clear" type="button">Clear Log</button>
           <button id="btn-rtt-download" type="button" disabled>Download Log</button>
           <label class="checkbox-label"><input id="chk-rtt-autoscroll" type="checkbox" checked /> Auto-scroll</label>
+          <label class="checkbox-label"><input id="chk-rtt-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
+          <label class="checkbox-label"><input id="chk-rtt-echo" type="checkbox" checked /> Local echo</label>
         </div>
         <p id="rtt-status" class="status"></p>
-        <pre id="rtt-log" class="log" style="min-height:120px;max-height:300px;overflow:auto;font-size:0.8rem;"></pre>
+        <pre id="rtt-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
         <div class="row" style="margin-top:0.5rem;">
           <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
           <button id="btn-rtt-send" type="button" disabled>Send</button>
+        </div>
+      </section>
+
+      <!-- UART (DAP) -->
+      <section id="tab-uart" class="panel tab-panel" hidden>
+        <h2>UART (DAP)</h2>
+        <p class="hint">Uses the probe's DAP_UART commands. Requires probe with UART capability (bit 7).</p>
+        <div class="row">
+          <label for="uart-baud-select">Baud</label>
+          <select id="uart-baud-select">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+          <button id="btn-uart-connect" type="button" disabled>Connect UART</button>
+          <button id="btn-uart-disconnect" type="button" disabled>Disconnect</button>
+        </div>
+        <div class="row">
+          <button id="btn-uart-clear" type="button">Clear Log</button>
+          <button id="btn-uart-download" type="button">Download Log</button>
+          <label class="checkbox-label"><input id="chk-uart-autoscroll" type="checkbox" checked /> Auto-scroll</label>
+          <label class="checkbox-label"><input id="chk-uart-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
+          <label class="checkbox-label"><input id="chk-uart-echo" type="checkbox" checked /> Local echo</label>
+        </div>
+        <p id="uart-status" class="status">Not connected</p>
+        <pre id="uart-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
+        <div class="row" style="margin-top:0.5rem;">
+          <input id="uart-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
+          <button id="btn-uart-send" type="button">Send</button>
         </div>
       </section>
 
@@ -220,27 +275,6 @@
         <span id="serial-compat-msg"></span>
       </section>
 
-      <!-- Serial Connection -->
-      <section class="panel" id="serial-connection-panel">
-        <h2>Serial Connection</h2>
-        <div class="row">
-          <label for="serial-baud-select">Baud</label>
-          <select id="serial-baud-select">
-            <option value="9600">9600</option>
-            <option value="19200">19200</option>
-            <option value="38400">38400</option>
-            <option value="57600">57600</option>
-            <option value="115200" selected>115200</option>
-            <option value="230400">230400</option>
-            <option value="460800">460800</option>
-            <option value="921600">921600</option>
-          </select>
-          <button id="btn-serial-connect" type="button">Connect Serial Port</button>
-          <button id="btn-serial-disconnect" type="button" disabled>Disconnect</button>
-        </div>
-        <p id="serial-status" class="status">Not connected</p>
-      </section>
-
       <!-- Serial Terminal -->
       <section class="panel" id="serial-terminal-panel">
         <h2>Terminal</h2>
@@ -248,8 +282,10 @@
           <button id="btn-serial-clear" type="button">Clear Log</button>
           <button id="btn-serial-download" type="button">Download Log</button>
           <label class="checkbox-label"><input id="chk-serial-autoscroll" type="checkbox" checked /> Auto-scroll</label>
+          <label class="checkbox-label"><input id="chk-serial-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
+          <label class="checkbox-label"><input id="chk-serial-echo" type="checkbox" checked /> Local echo</label>
         </div>
-        <pre id="serial-term-log" class="log" style="min-height:300px;max-height:500px;overflow:auto;font-size:0.8rem;"></pre>
+        <pre id="serial-term-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
         <div class="row" style="margin-top:0.5rem;">
           <input id="serial-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
           <button id="btn-serial-send" type="button">Send</button>
@@ -268,5 +304,13 @@
     </main>
 
     <script type="module" src="src/app.js"></script>
+    <script>
+      // Show dev-only options when ?dev=1
+      if (new URLSearchParams(location.search).has("dev")) {
+        document.querySelectorAll("[hidden]").forEach(el => {
+          if (el.tagName === "OPTION" && el.value === "jlink-webusb") el.hidden = false;
+        });
+      }
+    </script>
   </body>
 </html>

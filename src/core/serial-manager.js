@@ -1,12 +1,13 @@
 import { WebSerialUart } from "../backends/serial/web-serial-uart.js";
+import { Topics } from "./event-bus-topics.js";
 
 export class SerialManager {
-  constructor() {
+  constructor(bus) {
     this._uart = null;
     this._connected = false;
     this._portInfo = null;
-    this._onData = null;
     this._baudRate = 115200;
+    this._bus = bus;
   }
 
   static get supported() {
@@ -34,7 +35,7 @@ export class SerialManager {
       parity,
       flowControl,
       onData: (bytes) => {
-        if (this._onData) this._onData(bytes);
+        this._bus.emit(Topics.SERIAL_DATA, { bytes });
       }
     });
     this._connected = true;
@@ -50,10 +51,6 @@ export class SerialManager {
   async send(data) {
     if (!this._uart) throw new Error("No serial port");
     await this._uart.send(data);
-  }
-
-  set onData(fn) {
-    this._onData = fn;
   }
 
   get connected() {

@@ -1,6 +1,8 @@
+import { Topics } from "../../core/event-bus-topics.js";
+
 export class Nrf52FlashProgrammer {
-  constructor(progressBus, adiSession) {
-    this.progressBus = progressBus;
+  constructor(bus, adiSession) {
+    this._bus = bus;
     this.adi = adiSession;
   }
 
@@ -80,61 +82,57 @@ export class Nrf52FlashProgrammer {
   }
 
   async programImage(image) {
-    const segments = this.segmentsFromAddresses(image.addresses);
     const transport = this.adi.dapCore?.transport ?? null;
-    const origLog = transport?.log ?? null;
-    if (transport) transport.log = null;
+    return (transport ? transport.withQuiet(() => this._programImageImpl(image)) : this._programImageImpl(image));
+  }
 
-    try {
-      this.progressBus.emit({ type: "program", percent: 5, message: "CMSIS-DAP NVMC prepare" });
-      await this.setConfig(2);
+  async _programImageImpl(image) {
+    const segments = this.segmentsFromAddresses(image.addresses);
+    this._emitProgress("program", 5, "CMSIS-DAP NVMC prepare");
+    await this.setConfig(2);
 
-      const pages = this.pagesForSegments(segments);
-      for (let i = 0; i < pages.length; i += 1) {
-        await this.erasePage(pages[i]);
-        const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
-        this.progressBus.emit({ type: "program", percent, message: `Erased page 0x${pages[i].toString(16)}` });
-      }
-
-      await this.setConfig(1);
-
-      const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
-      let writtenWords = 0;
-      let lastReportedWords = 0;
-
-      for (const seg of segments) {
-        const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
-        const wordsBeforeSeg = writtenWords;
-        const words = this.buildWordArray(image, seg.start, seg.end);
-        await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount, (doneInSeg) => {
-          const total = wordsBeforeSeg + doneInSeg;
-          if (total - lastReportedWords < 1024 && total < totalWords) return;
-          lastReportedWords = total;
-          const percent = 40 + Math.floor((total / Math.max(1, totalWords)) * 55);
-          this.progressBus.emit({ type: "program", percent, message: `Programmed ${total * 4} / ${totalWords * 4} bytes` });
-        });
-        writtenWords += segWordCount;
-      }
-
-      await this.waitReady();
-      await this.setConfig(0);
-      this.progressBus.emit({ type: "program", percent: 100, message: `CMSIS-DAP programmed ${image.byteCount} bytes` });
-    } finally {
-      if (transport) transport.log = origLog;
+    const pages = this.pagesForSegments(segments);
+    for (let i = 0; i < pages.length; i += 1) {
+      await this.erasePage(pages[i]);
+      const percent = 5 + Math.floor(((i + 1) / Math.max(1, pages.length)) * 35);
+      this._emitProgress("program", percent, `Erased page 0x${pages[i].toString(16)}`);
     }
+
+    await this.setConfig(1);
+
+    const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
+    let writtenWords = 0;
+    let lastReportedWords = 0;
+
+    for (const seg of segments) {
+      const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
+      const wordsBeforeSeg = writtenWords;
+      const words = this.buildWordArray(image, seg.start, seg.end);
+      await this.adi.writeMemBlockFast(seg.start, words, 0, segWordCount, (doneInSeg) => {
+        const total = wordsBeforeSeg + doneInSeg;
+        if (total - lastReportedWords < 1024 && total < totalWords) return;
+        lastReportedWords = total;
+        const percent = 40 + Math.floor((total / Math.max(1, totalWords)) * 55);
+        this._emitProgress("program", percent, `Programmed ${total * 4} / ${totalWords * 4} bytes`);
+      });
+      writtenWords += segWordCount;
+    }
+
+    await this.waitReady();
+    await this.setConfig(0);
+    this._emitProgress("program", 100, `CMSIS-DAP programmed ${image.byteCount} bytes`);
   }
 
   async verifyImage(image) {
+    const transport = this.adi.dapCore?.transport ?? null;
+    return (transport ? transport.withQuiet(() => this._verifyImageImpl(image)) : this._verifyImageImpl(image));
+  }
+
+  async _verifyImageImpl(image) {
     const segments = this.segmentsFromAddresses(image.addresses);
     const totalWords = segments.reduce((sum, seg) => sum + Math.ceil((seg.end - seg.start + 1) / 4), 0);
     const useBlockRead = typeof this.adi.readMemBlockFast === "function";
     let checked = 0;
-
-    const transport = this.adi.dapCore?.transport ?? null;
-    const origLog = transport?.log ?? null;
-    if (transport) transport.log = null;
-
-    try {
 
     for (const seg of segments) {
       const segWordCount = Math.ceil((seg.end - seg.start + 1) / 4);
@@ -163,7 +161,7 @@ export class Nrf52FlashProgrammer {
           offset += count;
           if (checked % 256 === 0 || checked === totalWords) {
             const percent = Math.floor((checked / Math.max(1, totalWords)) * 100);
-            this.progressBus.emit({ type: "verify", percent, message: `Verified ${checked}/${totalWords} words` });
+            this._emitProgress("verify", percent, `Verified ${checked}/${totalWords} words`);
           }
         }
       } else {
@@ -184,15 +182,15 @@ export class Nrf52FlashProgrammer {
           currentAddr += 4;
           if (checked % 128 === 0 || checked === totalWords) {
             const percent = Math.floor((checked / Math.max(1, totalWords)) * 100);
-            this.progressBus.emit({ type: "verify", percent, message: `Verified ${checked}/${totalWords} words` });
+            this._emitProgress("verify", percent, `Verified ${checked}/${totalWords} words`);
           }
         }
       }
     }
-    this.progressBus.emit({ type: "verify", percent: 100, message: "CMSIS-DAP verify complete" });
+    this._emitProgress("verify", 100, "CMSIS-DAP verify complete");
+  }
 
-    } finally {
-      if (transport) transport.log = origLog;
-    }
+  _emitProgress(kind, percent, message) {
+    this._bus.emit(Topics.FLASH_PROGRESS, { kind, percent, message });
   }
 }

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#2c6e49"/>
+
+  <!-- Chip body -->
+  <rect x="152" y="152" width="208" height="208" rx="20" fill="none" stroke="white" stroke-width="18"/>
+
+  <!-- Left pins -->
+  <line x1="104" y1="196" x2="152" y2="196" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="104" y1="236" x2="152" y2="236" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="104" y1="276" x2="152" y2="276" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="104" y1="316" x2="152" y2="316" stroke="white" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Right pins -->
+  <line x1="360" y1="196" x2="408" y2="196" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="360" y1="236" x2="408" y2="236" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="360" y1="276" x2="408" y2="276" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <line x1="360" y1="316" x2="408" y2="316" stroke="white" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Lightning bolt (flash symbol) -->
+  <path d="M274 178 L228 266 L256 266 L238 334 L296 243 L266 243 Z" fill="white"/>
+</svg>

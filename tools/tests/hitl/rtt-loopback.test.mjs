@@ -47,7 +47,7 @@ test("rtt-loopback: flash firmware, reset, find RTT control block", skipUnlessFl
   }
 
   // Search for RTT control block in RAM
-  const target = await detectConnectedTarget();
+  const { target } = await detectConnectedTarget();
   const ramStart = target.ram.start;
   const ramSize = target.ram.size;
 
@@ -61,7 +61,7 @@ test("rtt-loopback: flash firmware, reset, find RTT control block", skipUnlessFl
 
 test("rtt-loopback: read RTT output contains magic string", skipUnlessFlash(), async () => {
   const adi = getAdi();
-  const target = await detectConnectedTarget();
+  const { target } = await detectConnectedTarget();
   const ramStart = target.ram.start;
   const ramSize = target.ram.size;
 

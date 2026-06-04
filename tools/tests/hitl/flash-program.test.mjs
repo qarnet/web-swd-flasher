@@ -32,7 +32,7 @@ test("flash: NVMC_READY is 1 at idle", skipUnlessFlash(), async () => {
 test("flash: erase single page and verify 0xFF", skipUnlessFlash(), async () => {
   const flasher = makeFlasher();
   // Erase the last page of flash (safe area, unlikely to brick)
-  const target = await detectConnectedTarget();
+  const { target } = await detectConnectedTarget();
   const pageSize = target.flash.pageSize;
   const eraseAddr = target.flash.start + target.flash.size - pageSize;
 

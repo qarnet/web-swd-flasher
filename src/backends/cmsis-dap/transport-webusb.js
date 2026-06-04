@@ -44,6 +44,16 @@ export class CmsisDapWebUsbTransport {
     this.log = logger;
   }
 
+  async withQuiet(fn) {
+    const saved = this.log;
+    this.log = null;
+    try {
+      return await fn();
+    } finally {
+      this.log = saved;
+    }
+  }
+
   debug(message, payload = null) {
     if (this.log) {
       this.log(`[cmsis-dap] ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}`, true);

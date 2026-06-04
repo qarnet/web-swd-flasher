@@ -78,7 +78,7 @@ test("cmsis-dap transfer parses read values", async () => {
   assert.equal(value, 0x2ba01477);
 });
 
-test("cmsis-dap connect sends setup commands", { skip: "needs full connect mock sequence" }, async () => {
+test("cmsis-dap connect sends setup commands", { skip: "needs scripted FakeTransport queue (DAP_Connect first, then DAP_Info/DAP_SWJ_Clock/DAP_TransferConfigure/DAP_SWJ_Sequence in order)" }, async () => {
   const t = new FakeTransport();
   const core = new CmsisDapCore(t, 100000);
   t.next.push(new Uint8Array([0x02, 0x01]));
@@ -91,7 +91,7 @@ test("cmsis-dap connect sends setup commands", { skip: "needs full connect mock 
   await core.connect();
 });
 
-test("cmsis-dap transfer retries wait/noack", { skip: "needs full connect mock sequence" }, async () => {
+test("cmsis-dap transfer retries wait/noack", { skip: "needs at least 8 queued responses (3 WAIT + 1 ACK per retry cycle)" }, async () => {
   const t = new FakeTransport();
   const core = new CmsisDapCore(t);
   t.next.push(new Uint8Array([0x05, 0x01, 0x07, 0, 0, 0, 0]));

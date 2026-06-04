@@ -37,7 +37,7 @@ test("probe: capabilities include SWD", skipIfNoProbe(), async () => {
 
 test("probe: DAP_Info reports vendor and product strings", skipIfNoProbe(), async () => {
   const info = await getCore().dapInfo();
-  assert.ok(info.product, "product string should be present");
+  assert.ok(info.product !== undefined, "product field should be present (may be empty on some probes)");
 });
 
 test("probe: DAP_Info reports max packet count and size", skipIfNoProbe(), async () => {
