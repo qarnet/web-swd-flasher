@@ -148,6 +148,7 @@ export class TerminalController {
         this._renderQueue();
       });
       this._sendBtnEl.parentNode.insertBefore(queueBtn, this._sendBtnEl);
+      this._sendBtnEl.closest(".row")?.classList.add("terminal-send-row");
     }
 
     this._filterMode = "off";
