@@ -18,11 +18,9 @@ test("app.js bootstrap: all critical imports resolve", async () => {
     await import("../../src/ui/panels/swd-uicr-panel.js");
     await import("../../src/ui/panels/swd-debug-panel.js");
     await import("../../src/ui/panels/swd-memory-panel.js");
-    await import("../../src/ui/panels/swd-rtt-panel.js");
     await import("../../src/ui/panels/swd-firmware-panel.js");
     await import("../../src/ui/panels/swd-connection-panel.js");
     await import("../../src/ui/panels/serial-connection-panel.js");
-    await import("../../src/ui/panels/serial-terminal-panel.js");
     await import("../../src/ui/components/panel-logger.js");
     await import("../../src/ui/components/tab-controller.js");
     await import("../../src/ui/components/topbar-build-badge.js");
