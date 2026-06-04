@@ -101,7 +101,7 @@ async function init() {
 
   // Panels
   const connectionPanel = new SwdConnectionPanel({ bus, backendProvider, backendManager, logger });
-  connectionPanel.mount(document.getElementById("tab-connection"));
+  connectionPanel.mount(document.getElementById("swd-conn-controls"));
 
   const recoveryPanel = new SwdRecoveryPanel({ bus, backendProvider, logger });
   recoveryPanel.mount(document.getElementById("tab-recovery"));
@@ -125,7 +125,7 @@ async function init() {
   uartPanel.mount(document.getElementById("tab-uart"));
 
   const serialConnectionPanel = new SerialConnectionPanel({ bus, serialManager });
-  serialConnectionPanel.mount(document.getElementById("serial-connection-panel"));
+  serialConnectionPanel.mount(document.getElementById("serial-conn-controls"));
 
   const serialTerminalPanel = new SerialTerminalPanel({ bus, serialManager });
   serialTerminalPanel.mount(document.getElementById("serial-terminal-panel"));
@@ -141,7 +141,7 @@ async function init() {
     containerSelector: "#section-swd",
     buttonSelector: "#section-swd .tab-btn",
     panelSelector: "#section-swd .tab-panel",
-    defaultTab: "connection",
+    defaultTab: "firmware",
   });
   new ModeController({
     sectionMap: {

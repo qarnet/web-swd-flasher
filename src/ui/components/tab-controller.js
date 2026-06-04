@@ -23,6 +23,8 @@ export class ModeController {
   constructor({ sectionMap }) {
     this._buttons = document.querySelectorAll(".mode-btn");
     this._sections = sectionMap;
+    this._swdCtrl = document.getElementById("swd-conn-controls");
+    this._serialCtrl = document.getElementById("serial-conn-controls");
     this._init();
   }
 
@@ -33,6 +35,8 @@ export class ModeController {
       for (const [key, el] of Object.entries(this._sections)) {
         el.hidden = key !== mode;
       }
+      if (this._swdCtrl) this._swdCtrl.hidden = mode !== "swd";
+      if (this._serialCtrl) this._serialCtrl.hidden = mode !== "serial";
     }));
   }
 }

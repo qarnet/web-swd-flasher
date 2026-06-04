@@ -40,6 +40,8 @@ body {
   transition: background 0.2s, color 0.2s;
   overflow: hidden;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Sticky top bar */
@@ -93,7 +95,8 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 3rem);
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   margin: 0.5rem;
   padding: 0 0.25rem 0.5rem;
@@ -101,7 +104,6 @@ body {
 .app[hidden] { display: none !important; }
 
 main.app {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
@@ -182,6 +184,45 @@ h1 { margin-bottom: 0.25rem; }
 
 .mode-btn:hover {
   color: var(--fg);
+}
+
+#swd-conn-controls,
+#serial-conn-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+#swd-conn-controls[hidden],
+#serial-conn-controls[hidden] { display: none !important; }
+#connection-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0 0.75rem;
+}
+
+#connection-bar select {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+#connection-bar button {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+}
+
+.conn-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: 0.2rem;
 }
 
 button {
