@@ -59,6 +59,10 @@
   flex-direction: column;
   min-height: 0;
 }
+.terminal-fullscreen .terminal-box {
+  border-radius: 0;
+  border: none;
+}
 .terminal-fullscreen > .terminal-templates,
 .terminal-fullscreen > .terminal-queue {
   max-height: none;
@@ -116,6 +120,22 @@
   border: none !important;
   border-left: 1px solid var(--border) !important;
   align-self: stretch;
+}
+
+/* ===== Unified terminal box (log area + send bar) ===== */
+.terminal-box {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.terminal-box > .terminal-log-wrapper .log {
+  border-radius: 8px 8px 0 0;
+}
+.terminal-box > .terminal-send-row {
+  border-radius: 0 0 8px 8px;
 }
 
 /* ===== Log wrapper (contains log + toolbar overlays) ===== */

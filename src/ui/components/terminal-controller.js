@@ -262,19 +262,39 @@ export class TerminalController {
       }
     }
 
-    const rttInputRow = main.querySelector('#rtt-ram-start')?.closest('.row');
-    const rttBtnRow = main.querySelector('#btn-rtt-search')?.closest('.row');
-    if (rttInputRow && rttBtnRow && rttInputRow !== rttBtnRow) {
-      rttBtnRow.parentNode.insertBefore(rttBtnRow, rttInputRow);
-    }
-
     const statusEl = main.querySelector('.status');
     const transportRow = main.querySelector('[id$="-connect" i], [id$="-disconnect" i], [id$="-search" i]')?.closest('.row');
     if (statusEl && transportRow && statusEl.parentNode === main) {
       transportRow.appendChild(statusEl);
     }
 
-    this._createToolbar(main);
+    const extraDropdowns = [];
+    const rttInputRow = main.querySelector("#rtt-ram-start")?.closest(".row");
+    if (rttInputRow) {
+      const rttPanel = document.createElement("div");
+      rttPanel.className = "terminal-dropdown";
+      rttPanel.style.display = "none";
+      const closeBtn = document.createElement("button");
+      closeBtn.className = "dd-close";
+      closeBtn.textContent = "×";
+      closeBtn.addEventListener("click", (e) => { e.stopPropagation(); this._toolbarCloseAll?.(); });
+      rttPanel.appendChild(closeBtn);
+      rttPanel.appendChild(rttInputRow);
+      extraDropdowns.push({ label: "⋯", title: "RTT Config", panel: rttPanel });
+    }
+
+    this._createToolbar(main, extraDropdowns);
+
+    // Wrap log-wrapper + send bar in a single bordered terminal-box
+    const logWrapper = main.querySelector(".terminal-log-wrapper");
+    const sendRowEl = main.querySelector(".terminal-send-row");
+    if (logWrapper && sendRowEl) {
+      const termBox = document.createElement("div");
+      termBox.className = "terminal-box";
+      logWrapper.parentNode.insertBefore(termBox, logWrapper);
+      termBox.appendChild(logWrapper);
+      termBox.appendChild(sendRowEl);
+    }
 
     this._collapseEventLog(panelEl);
 
@@ -291,6 +311,13 @@ export class TerminalController {
     panelEl.style.position = "";
     const main = panelEl.querySelector(".terminal-main");
     if (main) {
+      const termBox = main.querySelector(".terminal-box");
+      if (termBox) {
+        while (termBox.children.length > 0) {
+          main.insertBefore(termBox.children[0], termBox);
+        }
+        termBox.remove();
+      }
       while (main.children.length > 0) {
         panelEl.appendChild(main.children[0]);
       }
@@ -326,7 +353,7 @@ export class TerminalController {
     });
   }
 
-  _createToolbar(main) {
+  _createToolbar(main, extraDropdowns = []) {
     const logEl = this._view._rootEl;
     const logWrapper = document.createElement("div");
     logWrapper.className = "terminal-log-wrapper";
@@ -341,12 +368,11 @@ export class TerminalController {
       btn.className = "toolbar-btn";
       btn.textContent = label;
       btn.title = title;
+      panelEl._toolbarBtn = btn;
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const isOpen = panelEl.style.display === "block";
-        if (!isOpen) {
-          closeAllExcept(panelEl);
-        }
+        if (!isOpen) closeAllExcept(panelEl);
         panelEl.style.display = isOpen ? "none" : "block";
         btn.classList.toggle("active", !isOpen);
       });
@@ -373,31 +399,36 @@ export class TerminalController {
       panel.classList.toggle("terminal-fullscreen", fs);
     });
 
+    for (const { label, title, panel } of extraDropdowns) {
+      logWrapper.appendChild(panel);
+      bar.appendChild(makeDropBtn(label, title, panel));
+    }
     bar.appendChild(searchBtn);
     bar.appendChild(settingsBtn);
     bar.appendChild(fullscreenBtn);
     logWrapper.appendChild(bar);
 
+    const allDropPanels = [settingsPanel, searchPanel, ...extraDropdowns.map(d => d.panel)];
+
     const closeAllExcept = (keep) => {
-      [settingsPanel, searchPanel].forEach(p => {
-        if (p !== keep) p.style.display = "none";
-      });
-      bar.querySelectorAll(".toolbar-btn.active").forEach(b => {
-        if ((keep === settingsPanel && b === settingsBtn) ||
-            (keep === searchPanel && b === searchBtn)) return;
-        b.classList.remove("active");
+      allDropPanels.forEach(p => {
+        if (p !== keep) {
+          p.style.display = "none";
+          p._toolbarBtn?.classList.remove("active");
+        }
       });
     };
 
     const closeAll = () => {
-      settingsPanel.style.display = "none";
-      searchPanel.style.display = "none";
-      bar.querySelectorAll(".toolbar-btn.active").forEach(b => b.classList.remove("active"));
+      allDropPanels.forEach(p => {
+        p.style.display = "none";
+        p._toolbarBtn?.classList.remove("active");
+      });
     };
 
     bar.addEventListener("mousedown", (e) => e.stopPropagation());
     document.addEventListener("click", (e) => {
-      if (!bar.contains(e.target) && !settingsPanel.contains(e.target) && !searchPanel.contains(e.target)) {
+      if (!bar.contains(e.target) && allDropPanels.every(p => !p.contains(e.target))) {
         closeAll();
       }
     });
