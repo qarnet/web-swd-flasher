@@ -50,9 +50,11 @@ function _saveSharedQueue(items) {
 }
 
 // Cross-tab sync — storage events fire in OTHER tabs only
-window.addEventListener("storage", (e) => {
-  if (e.key === _SHARED_QUEUE_KEY) _dispatchQueueChange();
-});
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === _SHARED_QUEUE_KEY) _dispatchQueueChange();
+  });
+}
 import { SearchIndex } from "./terminal-search-index.js";
 import {
   highlightMatches,
