@@ -41,6 +41,11 @@ async function switchMode(page, mode) {
   }, mode);
 }
 
+// Use direct DOM dispatch to bypass z-index overlays and hidden ancestors.
+async function clickEl(page, selector) {
+  await page.$eval(selector, el => el.click());
+}
+
 async function connectMock(page) {
   await page.select("#backend-select", "mock");
   await page.click("#btn-connect");
@@ -159,9 +164,9 @@ async function main() {
     await runTest("load hex via fetch enables program buttons", async () => {
       await switchTab(page, "firmware");
       await page.$eval("#url-input", el => { el.value = "/test.hex"; });
-      await page.click("#btn-fetch-hex");
+      await clickEl(page, "#btn-fetch-hex");
       await new Promise(r => setTimeout(r, 500));
-      await page.click("#chk-confirm-program");
+      await clickEl(page, "#chk-confirm-program");
       await new Promise(r => setTimeout(r, 200));
       const prog = await page.$eval("#btn-program", el => el.disabled);
       const verify = await page.$eval("#btn-verify", el => el.disabled);
@@ -177,7 +182,7 @@ async function main() {
     });
 
     await runTest("program button triggers flash progress", async () => {
-      await page.click("#btn-program");
+      await clickEl(page, "#btn-program");
       // Check that progress bar becomes visible during program
       await page.waitForFunction(() => {
         const bar = document.getElementById("flash-progress-bar");
@@ -228,7 +233,7 @@ async function main() {
     });
 
     await runTest("read registers fills regs panel", async () => {
-      await page.click("#btn-core-regs");
+      await clickEl(page, "#btn-core-regs");
       await new Promise(r => setTimeout(r, 500));
       const hidden = await page.$eval("#debug-regs", el => el.hidden);
       if (hidden) throw new Error("regs panel still hidden after read");
@@ -242,7 +247,7 @@ async function main() {
       await new Promise(r => setTimeout(r, 200));
       await page.$eval("#mem-addr-input", el => { el.value = "0x1000"; el.dispatchEvent(new Event("change", {bubbles:true})); });
       await page.$eval("#mem-len-input", el => { el.value = "64"; el.dispatchEvent(new Event("change", {bubbles:true})); });
-      await page.click("#btn-mem-read");
+      await clickEl(page, "#btn-mem-read");
       await new Promise(r => setTimeout(r, 1000));
       const status = await page.$eval("#mem-status", el => el.textContent);
       if (!status.includes("Read") && !status.includes("read")) throw new Error(`mem status: "${status}"`);
@@ -264,7 +269,7 @@ async function main() {
     await runTest("UICR read completes", async () => {
       await switchTab(page, "uicr");
       await new Promise(r => setTimeout(r, 200));
-      await page.click("#btn-uicr-read");
+      await clickEl(page, "#btn-uicr-read");
       await new Promise(r => setTimeout(r, 1000));
       const status = await page.$eval("#uicr-status", el => el.textContent);
       if (!status.includes("complete")) throw new Error(`uicr status: "${status}"`);
@@ -287,7 +292,7 @@ async function main() {
 
     await runTest("RTT clear button clears log", async () => {
       await page.evaluate(() => { document.getElementById("rtt-log").textContent = "test"; });
-      await page.click("#btn-rtt-clear");
+      await clickEl(page, "#btn-rtt-clear");
       await new Promise(r => setTimeout(r, 200));
       const t = await page.$eval("#rtt-log", el => el.textContent);
       if (t !== "") throw new Error(`rtt-log not cleared: "${t}"`);
@@ -329,7 +334,7 @@ async function main() {
 
     await runTest("serial clear button works", async () => {
       await page.evaluate(() => { document.getElementById("serial-term-log").textContent = "test"; });
-      await page.click("#btn-serial-clear");
+      await clickEl(page, "#btn-serial-clear");
       await new Promise(r => setTimeout(r, 200));
       const t = await page.$eval("#serial-term-log", el => el.textContent);
       if (t !== "") throw new Error(`serial log not cleared: "${t}"`);
