@@ -23,19 +23,46 @@ export class DapUartTerminalSession extends TerminalSession {
     await this._uart.send(bytes);
   }
 
-  init({ rootEl, bus, onData, onReadyChange }) {
-    this._onData = onData;
-    this._onReadyChange = onReadyChange;
+  buildControls() {
+    const container = document.createElement("div");
+    container.innerHTML = `
+      <div class="dd-row">
+        <label class="dd-check-label" style="gap:0.3rem">
+          Baud
+          <select class="uart-baud-select dd-input">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200" selected>115200</option>
+            <option value="230400">230400</option>
+            <option value="460800">460800</option>
+            <option value="921600">921600</option>
+          </select>
+        </label>
+        <div class="dd-actions">
+          <button class="btn-uart-connect" type="button" disabled>Connect UART</button>
+          <button class="btn-uart-disconnect" type="button" disabled>Disconnect</button>
+        </div>
+      </div>
+      <p class="uart-status" style="margin:0.3rem 0 0;font-size:0.72rem;color:var(--muted)">Not connected</p>
+    `;
 
     this._els = {
-      baudSelect:     rootEl.querySelector("#uart-baud-select"),
-      btnConnect:     rootEl.querySelector("#btn-uart-connect"),
-      btnDisconnect:  rootEl.querySelector("#btn-uart-disconnect"),
-      btnDownload:    rootEl.querySelector("#btn-uart-download"),
-      status:         rootEl.querySelector("#uart-status"),
+      baudSelect:    container.querySelector(".uart-baud-select"),
+      btnConnect:    container.querySelector(".btn-uart-connect"),
+      btnDisconnect: container.querySelector(".btn-uart-disconnect"),
+      status:        container.querySelector(".uart-status"),
     };
 
     persistInput(this._els.baudSelect, "uart-baud");
+
+    return container;
+  }
+
+  init({ rootEl: _rootEl, bus, onData, onReadyChange }) {
+    this._onData = onData;
+    this._onReadyChange = onReadyChange;
 
     this._els.btnConnect.addEventListener("click",    this._onConnect);
     this._els.btnDisconnect.addEventListener("click", this._onDisconnect);

@@ -24,6 +24,13 @@ export class XtermTerminalPanel extends BasePanel {
     this._logLines = [];
     this._resizeObserver = null;
     this._containerEl = null;
+    this._transportBtn = null;
+  }
+
+  _updateTransportBtn() {
+    if (!this._transportBtn) return;
+    const ready = this._session.isReady();
+    this._transportBtn.style.color = ready ? "rgba(80,200,80,0.85)" : "rgba(220,80,80,0.75)";
   }
 
   mount(containerEl, sessionControlsEl = containerEl) {
@@ -72,6 +79,8 @@ export class XtermTerminalPanel extends BasePanel {
     const inputMode = new RawInputMode(this._session);
     this._term.onData(data => inputMode.handle(data));
 
+    const transportEl = this._session.buildControls?.() ?? null;
+
     const decoder = new TextDecoder("utf-8", { fatal: false });
     this._sessionCleanup = this._session.init({
       rootEl: sessionControlsEl,
@@ -89,6 +98,7 @@ export class XtermTerminalPanel extends BasePanel {
         } else {
           this._term.writeln("\r\n\x1b[33m[disconnected]\x1b[0m");
         }
+        this._updateTransportBtn();
       },
     });
 
@@ -97,7 +107,7 @@ export class XtermTerminalPanel extends BasePanel {
     });
     this._resizeObserver.observe(containerEl);
 
-    this._buildToolbar(containerEl, channelId, savedFontSize);
+    this._buildToolbar(containerEl, channelId, savedFontSize, transportEl);
 
     const grid = containerEl.querySelector(".terminal-panel-grid");
     const templatesSlot = grid.querySelector(".terminal-templates-slot");
@@ -128,18 +138,24 @@ export class XtermTerminalPanel extends BasePanel {
     this._sidebar.mount();
   }
 
-  _buildToolbar(containerEl, channelId, savedFontSize) {
+  _buildToolbar(containerEl, channelId, savedFontSize, transportEl = null) {
     const bar = containerEl.querySelector(".terminal-toolbar");
+
+    // ---- Transport dropdown (RTT / UART controls) ----
+    let transportPanel = null;
+    if (transportEl) {
+      transportPanel = document.createElement("div");
+      transportPanel.className = "terminal-dropdown xterm-toolbar-dropdown xterm-transport-dropdown";
+      transportPanel.style.display = "none";
+
+      transportPanel.appendChild(transportEl);
+      bar.appendChild(transportPanel);
+    }
 
     // ---- Search dropdown ----
     const searchPanel = document.createElement("div");
     searchPanel.className = "terminal-dropdown xterm-toolbar-dropdown";
     searchPanel.style.display = "none";
-
-    const searchClose = document.createElement("button");
-    searchClose.className = "dd-close";
-    searchClose.textContent = "✕";
-    searchPanel.appendChild(searchClose);
 
     const searchRow = document.createElement("div");
     searchRow.className = "dd-row";
@@ -244,7 +260,7 @@ export class XtermTerminalPanel extends BasePanel {
     this._bindDomListener(ddRow.querySelector(".btn-font-increase"), "click", () => updateFontSize(1));
 
     // ---- Toolbar buttons ----
-    const allDropPanels = [searchPanel, settingsPanel];
+    const allDropPanels = [transportPanel, searchPanel, settingsPanel].filter(Boolean);
 
     const closeAllExcept = (keep) => {
       allDropPanels.forEach(p => {
@@ -257,7 +273,6 @@ export class XtermTerminalPanel extends BasePanel {
 
     const closeAll = () => closeAllExcept(null);
 
-    this._bindDomListener(searchClose, "click", (e) => { e.stopPropagation(); closeAll(); });
     this._bindDomListener(settingsClose, "click", (e) => { e.stopPropagation(); closeAll(); });
 
     const makeDropBtn = (label, title, panelEl) => {
@@ -277,6 +292,11 @@ export class XtermTerminalPanel extends BasePanel {
       return btn;
     };
 
+    if (transportPanel) {
+      this._transportBtn = makeDropBtn("🔌", "Connection / Transport", transportPanel);
+      this._updateTransportBtn();
+      bar.appendChild(this._transportBtn);
+    }
     bar.appendChild(makeDropBtn("🔍", "Search", searchPanel));
     bar.appendChild(makeDropBtn("⚙", "Settings", settingsPanel));
 
@@ -313,6 +333,7 @@ export class XtermTerminalPanel extends BasePanel {
     this._logLines = [];
     this._resizeObserver = null;
     this._containerEl = null;
+    this._transportBtn = null;
     this._teardown();
   }
 }

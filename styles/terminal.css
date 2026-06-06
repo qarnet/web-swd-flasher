@@ -361,6 +361,20 @@
   border-radius: 4px;
 }
 
+/* ===== Transport dropdown (RTT / DAP UART controls) ===== */
+.xterm-transport-dropdown {
+  max-width: 500px;
+}
+.dd-input {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
 /* ===== Template sidebar ===== */
 .terminal-templates {
   font-size: 0.8rem;

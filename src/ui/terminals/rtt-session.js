@@ -22,24 +22,48 @@ export class RttSession extends TerminalSession {
     await this._rttClient.write(0, bytes);
   }
 
-  init({ rootEl, bus, onData: _onData, onReadyChange }) {
+  buildControls() {
+    const container = document.createElement("div");
+    container.innerHTML = `
+      <div class="dd-row" style="margin-bottom:0.4rem">
+        <label class="dd-check-label" style="gap:0.3rem">
+          RAM start <input class="rtt-ram-start dd-input" type="text" value="0x20000000" style="width:6.5rem" />
+        </label>
+        <label class="dd-check-label" style="gap:0.3rem">
+          Size KB <input class="rtt-ram-size dd-input" type="text" value="256" style="width:3rem" />
+        </label>
+        <label class="dd-check-label" style="gap:0.3rem">
+          Poll ms <input class="rtt-interval dd-input" type="number" value="50" min="10" max="500" style="width:3rem" />
+        </label>
+      </div>
+      <div class="dd-row">
+        <div class="dd-actions">
+          <button class="btn-rtt-search" type="button" disabled>Search</button>
+          <button class="btn-rtt-start" type="button" disabled>Start Polling</button>
+          <button class="btn-rtt-stop" type="button" disabled>Stop</button>
+        </div>
+      </div>
+      <p class="rtt-status" style="margin:0.3rem 0 0;font-size:0.72rem;color:var(--muted)"></p>
+    `;
+
     this._els = {
-      ramStartInput: rootEl.querySelector("#rtt-ram-start"),
-      ramSizeInput:  rootEl.querySelector("#rtt-ram-size"),
-      intervalInput: rootEl.querySelector("#rtt-interval"),
-      btnSearch:     rootEl.querySelector("#btn-rtt-search"),
-      btnStart:      rootEl.querySelector("#btn-rtt-start"),
-      btnStop:       rootEl.querySelector("#btn-rtt-stop"),
-      btnDownload:   rootEl.querySelector("#btn-rtt-download"),
-      txInput:       rootEl.querySelector("#rtt-tx-input"),
-      btnSend:       rootEl.querySelector("#btn-rtt-send"),
-      status:        rootEl.querySelector("#rtt-status"),
+      ramStartInput: container.querySelector(".rtt-ram-start"),
+      ramSizeInput:  container.querySelector(".rtt-ram-size"),
+      intervalInput: container.querySelector(".rtt-interval"),
+      btnSearch:     container.querySelector(".btn-rtt-search"),
+      btnStart:      container.querySelector(".btn-rtt-start"),
+      btnStop:       container.querySelector(".btn-rtt-stop"),
+      status:        container.querySelector(".rtt-status"),
     };
 
     persistInput(this._els.ramStartInput, "rtt-ram-start");
     persistInput(this._els.ramSizeInput, "rtt-ram-size");
     persistInput(this._els.intervalInput, "rtt-interval");
 
+    return container;
+  }
+
+  init({ rootEl: _rootEl, bus, onData: _onData, onReadyChange }) {
     this._onData = _onData;
     this._onReadyChange = onReadyChange;
 
@@ -53,10 +77,7 @@ export class RttSession extends TerminalSession {
       this._els.btnSearch.disabled = true;
       this._els.btnStart.disabled  = true;
       this._els.btnStop.disabled   = true;
-      this._els.btnDownload.disabled = true;
-      if (this._els.txInput)  this._els.txInput.disabled  = true;
-      if (this._els.btnSend)  this._els.btnSend.disabled  = true;
-      if (this._els.status)   this._els.status.textContent = "";
+      if (this._els.status) this._els.status.textContent = "";
       this._onReadyChange();
     });
 
@@ -99,10 +120,8 @@ export class RttSession extends TerminalSession {
           `Block at 0x${this._rttClient.controlBlockAddr.toString(16)} — ` +
           `${this._rttClient.upChannelCount} up, ${this._rttClient.downChannelCount} down`;
         this._els.btnStart.disabled = false;
-        this._els.btnDownload.disabled = false;
         if (this._rttClient.downChannelCount > 0) {
-          if (this._els.txInput)  this._els.txInput.disabled  = false;
-          if (this._els.btnSend)  this._els.btnSend.disabled  = false;
+          // xterm handles input directly
         }
         this._onReadyChange();
       } else {
