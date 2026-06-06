@@ -25,6 +25,11 @@ export class SerialManager {
     return temp.getAuthorizedPorts();
   }
 
+  async useAuthorizedPort() {
+    if (!this._uart) this._uart = new WebSerialUart();
+    return this._uart.useAuthorizedPort();
+  }
+
   async connect({ baudRate = 115200, dataBits = 8, stopBits = 1, parity = "none", flowControl = "none" } = {}) {
     if (!this._uart) throw new Error("No serial port selected");
     this._baudRate = baudRate;

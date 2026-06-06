@@ -58,8 +58,15 @@ export class SerialConnectionPanel extends BasePanel {
 
   _onConnect = async () => {
     try {
-      const info = await this._serialManager.requestPort();
-      this._els.status.textContent = `Selected: VID 0x${(info.usbVendorId ?? 0).toString(16)} PID 0x${(info.usbProductId ?? 0).toString(16)}`;
+      let info;
+      const authorized = await this._serialManager.getAuthorizedPorts();
+      if (authorized.length === 1) {
+        info = await this._serialManager.useAuthorizedPort();
+        this._els.status.textContent = `Auto-connecting to VID 0x${(info.usbVendorId ?? 0).toString(16)}...`;
+      } else {
+        info = await this._serialManager.requestPort();
+        this._els.status.textContent = `Selected: VID 0x${(info.usbVendorId ?? 0).toString(16)} PID 0x${(info.usbProductId ?? 0).toString(16)}`;
+      }
       const baudRate = parseInt(this._els.baudSelect.value, 10) || 115200;
       await this._serialManager.connect({ baudRate });
       this._els.status.textContent = `Connected at ${baudRate} baud`;
@@ -69,7 +76,7 @@ export class SerialConnectionPanel extends BasePanel {
       this._bus.emit(Topics.SERIAL_CONNECTED, { baudRate, portInfo: info });
       this._bus.emit(Topics.LOG_LINE, { source: "serial", level: "info", message: `Serial connected at ${baudRate} baud` });
     } catch (err) {
-      if (err.name === "NotFoundError") {
+      if (err.name === "NotFoundError" || err.message?.includes("cancel")) {
         this._els.status.textContent = "No port selected";
       } else {
         this._els.status.textContent = `Connection failed: ${err.message}`;

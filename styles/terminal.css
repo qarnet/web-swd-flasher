@@ -85,42 +85,74 @@
   .terminal-panel-grid > .terminal-queue { border-left: none; padding-left: 0; }
 }
 
-/* ===== Send row bar ===== */
-.terminal-send-row {
-  display: flex !important;
-  align-items: stretch;
-  gap: 0;
-  margin-top: 0 !important;
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-  overflow: hidden;
-  border-radius: 0 0 8px 8px;
-}
-.terminal-send-row input[type="text"] {
+/* ===== xterm panel layout fixes ===== */
+#serial-terminal-panel,
+#tab-rtt:not([hidden]),
+#tab-uart:not([hidden]) {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-height: 0;
+}
+
+#serial-terminal,
+#rtt-terminal,
+#uart-terminal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== xterm.js mount point ===== */
+.xterm-mount-point {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.xterm-mount-point .xterm,
+.xterm-mount-point .xterm-viewport,
+.xterm-mount-point .xterm-screen {
+  height: 100% !important;
+}
+
+/* ===== xterm font size group (inside settings dropdown) ===== */
+.dd-fontsize {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+}
+.dd-fontsize button {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+}
+.xterm-fontsize-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  min-width: 2.2rem;
+  text-align: center;
+  user-select: none;
+}
+
+/* ===== xterm column layout ===== */
+.terminal-xterm-col {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 0.45rem 0.6rem !important;
-  font-size: 0.83rem !important;
-  border: none !important;
-  border-right: 1px solid var(--border) !important;
-  outline: none !important;
-  border-radius: 0 !important;
-  background: var(--panel);
-  color: var(--fg);
-  align-self: stretch;
+  min-height: 0;
+  flex: 1;
+  position: relative;
 }
-.terminal-send-row input[type="text"]:focus {
-  outline: none !important;
-  box-shadow: inset 0 0 0 2px var(--accent);
-}
-.terminal-send-row button {
-  padding: 0 0.8rem !important;
-  font-size: 0.8rem !important;
-  border-radius: 0 !important;
-  border: none !important;
-  border-left: 1px solid var(--border) !important;
-  align-self: stretch;
+
+.terminal-templates-slot,
+.terminal-queue-slot {
+  background: var(--bg);
+  padding: 0.3rem 0.5rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
 }
 
 /* ===== Unified terminal box (log area + send bar) ===== */
@@ -163,6 +195,18 @@
   gap: 0.15rem;
   padding: 0.15rem 0.25rem;
   background: transparent;
+  /* Dropdowns positioned relative to toolbar, not the xterm column */
+}
+
+/* Dropdowns that hang below the toolbar buttons (higher specificity to override .terminal-dropdown left:0) */
+.terminal-toolbar .xterm-toolbar-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: auto;
+  min-width: 280px;
+  width: max-content;
+  max-width: 420px;
 }
 .toolbar-btn {
   border: 1px solid var(--border);
@@ -232,6 +276,30 @@
 }
 .dd-checks .checkbox-label {
   font-size: 0.72rem;
+}
+
+/* ===== xterm toolbar search/settings items ===== */
+.xterm-toolbar-dropdown .search-query {
+  flex: 1;
+  min-width: 120px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0.2rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+.xterm-toolbar-dropdown .search-count {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.dd-check-label {
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 /* ===== Search inline (inside dropdown) ===== */
@@ -527,47 +595,6 @@
 /* ===== SWD panel compact ===== */
 #section-swd .panel .row {
   gap: 0.3rem;
-}
-
-/* ===== History popup ===== */
-.history-popup {
-  position: absolute;
-  z-index: 200;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  list-style: none;
-  margin: 0;
-  padding: 0.2rem 0;
-  max-height: 180px;
-  overflow-y: auto;
-  min-width: 180px;
-}
-.history-popup li {
-  padding: 0.2rem 0.4rem;
-  font-size: 0.75rem;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.history-popup li:hover,
-.history-popup li[aria-selected="true"] {
-  background: var(--accent);
-  color: #fff;
-}
-
-/* ===== Match highlight ===== */
-mark.term-match {
-  background: var(--warn-bg);
-  color: var(--fg);
-  border-radius: 2px;
-}
-mark.term-match-current {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 2px;
 }
 
 /* ===== More menu ===== */

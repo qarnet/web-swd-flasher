@@ -17,9 +17,9 @@ export class RttSession extends TerminalSession {
     return this._rttClient != null && this._rttClient.downChannelCount > 0;
   }
 
-  async send(text) {
+  async sendRaw(bytes) {
     if (!this._rttClient) throw new Error("RTT not connected");
-    await this._rttClient.write(0, new TextEncoder().encode(text + "\n"));
+    await this._rttClient.write(0, bytes);
   }
 
   init({ rootEl, bus, onData: _onData, onReadyChange }) {

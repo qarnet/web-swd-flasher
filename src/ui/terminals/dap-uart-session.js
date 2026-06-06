@@ -18,9 +18,9 @@ export class DapUartTerminalSession extends TerminalSession {
 
   isReady() { return this._uart != null; }
 
-  async send(text) {
+  async sendRaw(bytes) {
     if (!this._uart) throw new Error("UART not connected");
-    await this._uart.send(new TextEncoder().encode(text + "\r\n"));
+    await this._uart.send(bytes);
   }
 
   init({ rootEl, bus, onData, onReadyChange }) {

@@ -16,6 +16,7 @@
     <script>!function(){var t=localStorage.getItem("theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark")}();</script>
     <link rel="stylesheet" href="styles/base.css" />
     <link rel="stylesheet" href="styles/terminal.css" />
+    <link rel="stylesheet" href="https://esm.sh/@xterm/xterm@5.5.0/css/xterm.css" />
   </head>
   <body>
     <div class="topbar">
@@ -207,18 +208,9 @@
           <button id="btn-rtt-search" type="button" disabled>Search</button>
           <button id="btn-rtt-start" type="button" disabled>Start Polling</button>
           <button id="btn-rtt-stop" type="button" disabled>Stop</button>
-          <button id="btn-rtt-clear" type="button">Clear Log</button>
-          <button id="btn-rtt-download" type="button" disabled>Download Log</button>
-          <label class="checkbox-label"><input id="chk-rtt-autoscroll" type="checkbox" checked /> Auto-scroll</label>
-          <label class="checkbox-label"><input id="chk-rtt-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
-          <label class="checkbox-label"><input id="chk-rtt-echo" type="checkbox" checked /> Local echo</label>
         </div>
         <p id="rtt-status" class="status"></p>
-        <pre id="rtt-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
-        <div class="row" style="margin-top:0.5rem;">
-          <input id="rtt-tx-input" type="text" placeholder="Send to down channel 0…" style="flex:1;" disabled />
-          <button id="btn-rtt-send" type="button" disabled>Send</button>
-        </div>
+        <div id="rtt-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
       </section>
 
       <!-- UART (DAP) -->
@@ -240,19 +232,8 @@
           <button id="btn-uart-connect" type="button" disabled>Connect UART</button>
           <button id="btn-uart-disconnect" type="button" disabled>Disconnect</button>
         </div>
-        <div class="row">
-          <button id="btn-uart-clear" type="button">Clear Log</button>
-          <button id="btn-uart-download" type="button">Download Log</button>
-          <label class="checkbox-label"><input id="chk-uart-autoscroll" type="checkbox" checked /> Auto-scroll</label>
-          <label class="checkbox-label"><input id="chk-uart-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
-          <label class="checkbox-label"><input id="chk-uart-echo" type="checkbox" checked /> Local echo</label>
-        </div>
         <p id="uart-status" class="status">Not connected</p>
-        <pre id="uart-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
-        <div class="row" style="margin-top:0.5rem;">
-          <input id="uart-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
-          <button id="btn-uart-send" type="button">Send</button>
-        </div>
+        <div id="uart-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
       </section>
 
       <!-- SWD Event Log -->
@@ -277,19 +258,7 @@
 
       <!-- Serial Terminal -->
       <section class="panel" id="serial-terminal-panel">
-        <h2>Terminal</h2>
-        <div class="row">
-          <button id="btn-serial-clear" type="button">Clear Log</button>
-          <button id="btn-serial-download" type="button">Download Log</button>
-          <label class="checkbox-label"><input id="chk-serial-autoscroll" type="checkbox" checked /> Auto-scroll</label>
-          <label class="checkbox-label"><input id="chk-serial-cr-newline" type="checkbox" checked /> Treat CR as newline</label>
-          <label class="checkbox-label"><input id="chk-serial-echo" type="checkbox" checked /> Local echo</label>
-        </div>
-        <pre id="serial-term-log" class="log" style="overflow:auto;font-size:0.8rem;"></pre>
-        <div class="row" style="margin-top:0.5rem;">
-          <input id="serial-tx-input" type="text" placeholder="Type to send…" style="flex:1;" />
-          <button id="btn-serial-send" type="button">Send</button>
-        </div>
+        <div id="serial-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
       </section>
 
       <!-- Serial Event Log -->
@@ -303,6 +272,16 @@
       </section>
     </main>
 
+    <script type="importmap">
+    {
+      "imports": {
+        "@xterm/xterm": "https://esm.sh/@xterm/xterm@5.5.0",
+        "@xterm/addon-fit": "https://esm.sh/@xterm/addon-fit@0.10.0",
+        "@xterm/addon-web-links": "https://esm.sh/@xterm/addon-web-links@0.11.0",
+        "@xterm/addon-search": "https://esm.sh/@xterm/addon-search@0.16.0"
+      }
+    }
+    </script>
     <script type="module" src="src/app.js"></script>
     <script>
       // Show dev-only options when ?dev=1

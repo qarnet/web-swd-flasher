@@ -1,7 +1,7 @@
 const TEMPLATES_KEY = "terminal:templates";
 const TEMPLATE_VARS_KEY = "terminal:template-vars";
 export const TEMPLATE_CAP = 50;
-export const VAR_RE = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
+export const VAR_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
 let _listeners = new Set();
 let _storageBound = false;
@@ -9,13 +9,7 @@ let _storageBound = false;
 let _templates = [];
 let _templateVars = {};
 
-try {
-  const raw = localStorage.getItem(TEMPLATES_KEY);
-  if (raw) {
-    const p = JSON.parse(raw);
-    if (Array.isArray(p)) _templates = p;
-  }
-} catch { _templates = []; }
+try { _templates = loadTemplates(); } catch { _templates = []; }
 
 try {
   const raw = localStorage.getItem(TEMPLATE_VARS_KEY);
@@ -70,7 +64,8 @@ export function loadTemplates() {
     const raw = localStorage.getItem(TEMPLATES_KEY);
     if (!raw) return [];
     const p = JSON.parse(raw);
-    return Array.isArray(p) ? p : [];
+    if (!Array.isArray(p)) return [];
+    return p.map(t => ({ ...t, vars: deriveVars(t.body || "") }));
   } catch { return []; }
 }
 

@@ -372,6 +372,522 @@ export async function fetchFlm(packUrl, flmPath) {
 
 ---
 
+## Layer 7 — xterm.js Interactive Terminal
+
+Replace the current log-viewer terminal (TerminalBuffer + TerminalView + TerminalController) with [xterm.js](https://xtermjs.org/) across all three terminal channels: Serial, RTT, DAP UART.
+
+### Goals
+
+- Input cursor lives **inside** the terminal stream — no separate text field
+- **Raw mode** by default: every keypress forwarded as bytes to device; device controls echo
+- Full VT100/VT220 emulation: cursor movement, Zephyr shell, embedded Linux console
+- Same 3-column layout: Templates sidebar | xterm.js | Queue sidebar
+- Copy via mouse selection (xterm built-in), download via plain-text parallel buffer
+- All three channels use the exact same `XtermTerminalPanel` — only the session differs
+- `InputMode` interface abstracts raw vs line mode for future line-mode addition
+
+### What gets dropped
+
+| Removed feature | Reason |
+|---|---|
+| Filter (show/hide lines) | xterm.js has no native line-hiding |
+| Local echo checkbox | Device controls echo in raw mode |
+| CR-as-newline checkbox | xterm handles terminal emulation natively |
+| Auto-scroll checkbox | xterm auto-scrolls natively |
+
+---
+
+### 7.1 npm setup + import maps  **[NOT STARTED]**
+
+xterm.js is an npm package. This project has no root `package.json`. Add one.
+
+**Step 1** — Create `/package.json` at project root:
+```json
+{
+  "private": true,
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0"
+  }
+}
+```
+
+**Step 2** — Run `npm install` at project root. This creates `/node_modules/`.
+
+**Step 3** — Add `/node_modules/` to `.gitignore` (add as first line under existing entries).
+
+**Step 4** — Add import map to `index.html` immediately before the first `<script type="module">` tag:
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@xterm/xterm": "./node_modules/@xterm/xterm/lib/xterm.js",
+    "@xterm/addon-fit": "./node_modules/@xterm/addon-fit/lib/addon-fit.js",
+    "@xterm/addon-web-links": "./node_modules/@xterm/addon-web-links/lib/addon-web-links.js"
+  }
+}
+</script>
+```
+
+**Step 5** — Add xterm CSS to `index.html` `<head>` (after existing `<link>` tags):
+```html
+<link rel="stylesheet" href="./node_modules/@xterm/xterm/css/xterm.css" />
+```
+
+**Step 6** — Update `Makefile`. Add `npm install` as prerequisite to `serve` and `serve-https`:
+```makefile
+node_modules: package.json
+	npm install
+
+serve: node_modules stamp-build-info
+	python -m http.server 8000
+
+serve-https: node_modules stamp-build-info
+	python3 serve-https.py 8443
+```
+
+**Step 7** — Update `sw.js` install handler. Add xterm files to the `cache.addAll([...])` list:
+```javascript
+"./node_modules/@xterm/xterm/lib/xterm.js",
+"./node_modules/@xterm/xterm/css/xterm.css",
+"./node_modules/@xterm/addon-fit/lib/addon-fit.js",
+"./node_modules/@xterm/addon-web-links/lib/addon-web-links.js",
+```
+
+**Verify**: Open browser, import `{ Terminal } from "@xterm/xterm"` in the console — no 404.
+
+---
+
+### 7.2 Session API — add `sendRaw(bytes)`  **[NOT STARTED]**
+
+The current `send(text)` method appends `\r\n` — this breaks interactive shells. Add a byte-level method.
+
+**File: `src/ui/terminals/terminal-session.js`**
+
+Add these two methods to the `TerminalSession` class:
+```javascript
+// Transmit raw bytes with no modification. Used by xterm raw mode.
+async sendRaw(bytes) { throw new Error("TerminalSession.sendRaw not implemented"); }
+
+// Transmit text with CRLF. Default implementation calls sendRaw.
+async sendLine(text) {
+  await this.sendRaw(new TextEncoder().encode(`${text}\r\n`));
+}
+```
+
+Change `send(text)` to delegate:
+```javascript
+async send(text) { return this.sendLine(text); }
+```
+
+Remove these getters — they rely on the old HTML structure that xterm replaces:
+- `get logSelector()`
+- `get txInputSelector()`
+- `get btnSendSelector()`
+
+**File: `src/ui/terminals/serial-session.js`**
+
+Add `sendRaw`:
+```javascript
+async sendRaw(bytes) {
+  await this._serialManager.send(bytes);
+}
+```
+
+Remove the old `send(text)` override (the base class default now handles it via `sendLine`).
+
+**File: `src/ui/terminals/dap-uart-session.js`**
+
+Add `sendRaw`:
+```javascript
+async sendRaw(bytes) {
+  if (!this._uart) throw new Error("UART not connected");
+  await this._uart.send(bytes);
+}
+```
+
+Remove the old `send(text)` override.
+
+**File: `src/ui/terminals/rtt-session.js`**
+
+Add `sendRaw`:
+```javascript
+async sendRaw(bytes) {
+  if (!this._rttClient) throw new Error("RTT not connected");
+  await this._rttClient.write(0, bytes);
+}
+```
+
+Remove the old `send(text)` override. Note: old code appended `"\n"` — raw mode lets the device handle line endings.
+
+**Important note about RTT and DAP UART sessions**: Both `RttSession.init()` and `DapUartTerminalSession.init()` access `rootEl` to find transport-specific buttons (`#btn-rtt-search`, `#uart-baud-select`, etc.). This `rootEl` must be the **section element** containing those buttons, NOT the small xterm container div. See step 7.6 for how `app.js` passes the right element.
+
+**Tests to write** (`tools/tests/terminal-session-sendraw.test.mjs`):
+- `sendRaw` on SerialSession calls `serialManager.send(bytes)` with exact bytes
+- `sendLine("hello")` encodes `"hello\r\n"` and calls `sendRaw`
+- `send("hello")` delegates to `sendLine`
+
+---
+
+### 7.3 InputMode interface  **[NOT STARTED]**
+
+Abstract the "what happens when xterm fires onData" logic so raw mode and future line mode are swappable.
+
+**New file: `src/ui/terminals/input-mode.js`**
+
+```javascript
+const _encoder = new TextEncoder();
+
+export class RawInputMode {
+  constructor(session) {
+    this._session = session;
+  }
+  // Called by xterm.onData(data) — data is a string of chars/escape sequences
+  handle(data) {
+    if (!this._session.isReady()) return;
+    void this._session.sendRaw(_encoder.encode(data));
+  }
+}
+
+// Future: export class LineInputMode { ... }
+// Line mode buffers locally, shows in terminal, sends on Enter.
+```
+
+**Tests** (`tools/tests/input-mode.test.mjs`):
+- `handle()` calls `session.sendRaw()` with encoded bytes
+- `handle()` is a no-op when `session.isReady()` returns false
+
+---
+
+### 7.4 Extract TerminalSidebarController  **[NOT STARTED]**
+
+The template sidebar and queue sidebar rendering currently lives in `TerminalController` (~400 lines). `XtermTerminalPanel` needs those sidebars but NOT the keyboard input handling. Extract sidebar logic into its own class.
+
+**New file: `src/ui/components/terminal-sidebar-controller.js`**
+
+Move out of `terminal-controller.js`:
+- Template sidebar: `_renderTemplates()`, `_showTemplateEditor()`, template card rendering, var inputs, Buffer/Send buttons
+- Queue sidebar: `_renderQueue()`, queue card rendering, Send Queue / Stop / Clear buttons
+
+Constructor signature:
+```javascript
+export class TerminalSidebarController {
+  constructor({ rootEl, channelId, send, isReady, logger }) {
+    // rootEl: the panel's container — sidebars are appended here
+    // channelId: "serial" | "uart" | "rtt" — for localStorage keys
+    // send(text): function called when user clicks Send on a template or queue item
+    //             In xterm panel: (text) => session.sendRaw(encoder.encode(text + "\r"))
+    // isReady(): function returning bool — gates Send buttons
+  }
+  mount() { /* builds sidebar DOM, subscribes to template store */ }
+  destroy() { /* removes DOM, cleans up listeners */ }
+}
+```
+
+**Update `TerminalController`** to use `TerminalSidebarController` internally (no behavior change — just delegates to the extracted class). This makes the existing panel keep working while enabling xterm to reuse the same sidebars.
+
+---
+
+### 7.5 XtermTerminalPanel  **[NOT STARTED]**
+
+**New file: `src/ui/panels/xterm-terminal-panel.js`**
+
+```javascript
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { RawInputMode } from "../terminals/input-mode.js";
+import { TerminalSidebarController } from "../components/terminal-sidebar-controller.js";
+import { downloadLog } from "../log-panel-helpers.js";
+import { BasePanel } from "./base-panel.js";
+
+export class XtermTerminalPanel extends BasePanel {
+  constructor({ session, bus, backendProvider, logger }) { ... }
+  mount(containerEl, sessionControlsEl = containerEl) { ... }
+  unmount() { ... }
+}
+```
+
+**`mount(containerEl, sessionControlsEl)` — step by step:**
+
+1. Store refs. `containerEl` is where xterm renders. `sessionControlsEl` is where transport buttons live (may be the same, or the parent section for RTT/UART).
+
+2. Build layout inside `containerEl` using `innerHTML`:
+   ```html
+   <div class="terminal-panel-grid">
+     <aside class="terminal-templates-slot"></aside>
+     <div class="terminal-xterm-col">
+       <div class="terminal-toolbar-row">
+         <button class="btn-xterm-clear">Clear</button>
+         <button class="btn-xterm-copy">Copy All</button>
+         <button class="btn-xterm-download">Download Log</button>
+       </div>
+       <div class="xterm-mount-point"></div>
+     </div>
+     <aside class="terminal-queue-slot"></aside>
+   </div>
+   ```
+
+3. Create xterm Terminal:
+   ```javascript
+   this._term = new Terminal({
+     cursorBlink: true,
+     convertEol: false,
+     scrollback: 10_000,
+     fontFamily: 'ui-monospace, Menlo, Consolas, "Liberation Mono", monospace',
+     fontSize: 14,
+     lineHeight: 1.2,
+     theme: {
+       background: "#050807",
+       foreground: "#d7f7d7",
+       cursor: "#d7f7d7",
+       selectionBackground: "#355c7d44",
+     },
+   });
+   ```
+
+4. Load addons and open:
+   ```javascript
+   this._fitAddon = new FitAddon();
+   this._term.loadAddon(this._fitAddon);
+   this._term.loadAddon(new WebLinksAddon());
+   this._term.open(containerEl.querySelector(".xterm-mount-point"));
+   this._fitAddon.fit();
+   ```
+
+5. Wire input: `const inputMode = new RawInputMode(this._session);`
+   `this._term.onData(data => inputMode.handle(data));`
+
+6. Plain-text log buffer (for download): `this._logLines = [];`
+
+7. Init session:
+   ```javascript
+   const decoder = new TextDecoder("utf-8", { fatal: false });
+   this._sessionCleanup = this._session.init({
+     rootEl: sessionControlsEl,
+     bus: this._bus,
+     backendProvider: this._backendProvider,
+     onData: (bytes) => {
+       const text = decoder.decode(bytes, { stream: true });
+       this._term.write(text);
+       this._logLines.push(text);
+     },
+     onReadyChange: () => {
+       if (this._session.isReady()) {
+         this._term.writeln("\r\n\x1b[32m[connected]\x1b[0m");
+         this._term.focus();
+       } else {
+         this._term.writeln("\r\n\x1b[33m[disconnected]\x1b[0m");
+       }
+     },
+   });
+   ```
+
+8. ResizeObserver: `new ResizeObserver(() => this._fitAddon.fit()).observe(containerEl);`
+
+9. Wire toolbar buttons:
+   - Clear: `this._term.clear(); this._logLines = [];`
+   - Copy All:
+     ```javascript
+     navigator.clipboard.writeText(this._logLines.join("")).then(() => {
+       const btn = containerEl.querySelector(".btn-xterm-copy");
+       const orig = btn.textContent;
+       btn.textContent = "Copied!";
+       setTimeout(() => { btn.textContent = orig; }, 1500);
+     });
+     ```
+   - Download: `downloadLog(this._logLines.join(""), \`${channelId}-log-${timestamp}.txt\`)`
+
+10. Mount sidebars:
+    ```javascript
+    this._sidebar = new TerminalSidebarController({
+      rootEl: containerEl,
+      channelId: this._session.channelId,
+      send: (text) => this._session.sendRaw(new TextEncoder().encode(text + "\r")),
+      isReady: () => this._session.isReady(),
+      logger: this._logger,
+    });
+    this._sidebar.mount();
+    ```
+    Note: `text + "\r"` sends CR only — shells expect CR, not CRLF.
+
+**`unmount()`:**
+```javascript
+unmount() {
+  this._resizeObserver?.disconnect();
+  this._sessionCleanup?.();
+  this._sidebar?.destroy();
+  this._term?.dispose();
+  this._term = null;
+  this._sessionCleanup = null;
+  this._sidebar = null;
+  this._logLines = [];
+  this._teardown(); // BasePanel cleanup
+}
+```
+
+---
+
+### 7.6 HTML changes in index.html  **[NOT STARTED]**
+
+**RTT section (`#tab-rtt`)** — Keep all RTT transport controls. Remove old terminal HTML. Add xterm container.
+
+Remove:
+```html
+<button id="btn-rtt-clear" ...>Clear Log</button>
+<button id="btn-rtt-download" ...>Download Log</button>
+<label ...><input id="chk-rtt-autoscroll" .../> Auto-scroll</label>
+<label ...><input id="chk-rtt-cr-newline" .../> Treat CR as newline</label>
+<label ...><input id="chk-rtt-echo" .../> Local echo</label>
+<pre id="rtt-log" ...></pre>
+<div class="row" ...> <!-- input + send button row -->
+  <input id="rtt-tx-input" .../>
+  <button id="btn-rtt-send" ...>Send</button>
+</div>
+```
+
+Add after `<p id="rtt-status">`:
+```html
+<div id="rtt-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+```
+
+**UART section (`#tab-uart`)** — Keep baud select, Connect/Disconnect, status paragraph. Remove old terminal HTML. Add xterm container.
+
+Remove:
+```html
+<button id="btn-uart-clear" ...>Clear Log</button>
+<button id="btn-uart-download" ...>Download Log</button>
+<label ...><input id="chk-uart-autoscroll" .../> Auto-scroll</label>
+<label ...><input id="chk-uart-cr-newline" .../> Treat CR as newline</label>
+<label ...><input id="chk-uart-echo" .../> Local echo</label>
+<pre id="uart-log" ...></pre>
+<div class="row" ...> <!-- input + send button row -->
+  <input id="uart-tx-input" .../>
+  <button id="btn-uart-send" ...>Send</button>
+</div>
+```
+
+Add after `<p id="uart-status">`:
+```html
+<div id="uart-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+```
+
+**Serial terminal section (`#serial-terminal-panel`)** — Remove everything inside except the outer `<section>`. The panel will build all its own content.
+
+Remove all children of `#serial-terminal-panel`. Add:
+```html
+<section class="panel" id="serial-terminal-panel">
+  <div id="serial-terminal" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+</section>
+```
+
+---
+
+### 7.7 app.js changes  **[NOT STARTED]**
+
+```javascript
+// Remove:
+import { UnifiedTerminalPanel } from "./ui/panels/unified-terminal-panel.js";
+
+// Add:
+import { XtermTerminalPanel } from "./ui/panels/xterm-terminal-panel.js";
+```
+
+Replace the three panel instantiations:
+
+```javascript
+// RTT — note: sessionControlsEl = tab-rtt (has Search/Start buttons)
+const rttPanel = new XtermTerminalPanel({ session: new RttSession({ backendProvider }), bus, backendProvider, logger });
+rttPanel.mount(document.getElementById("rtt-terminal"), document.getElementById("tab-rtt"));
+
+// UART — note: sessionControlsEl = tab-uart (has baud select / Connect buttons)
+const uartPanel = new XtermTerminalPanel({ session: new DapUartTerminalSession({ backendProvider, logger }), bus, backendProvider, logger });
+uartPanel.mount(document.getElementById("uart-terminal"), document.getElementById("tab-uart"));
+
+// Serial — sessionControlsEl not needed (SerialSession doesn't touch DOM)
+const serialTerminalPanel = new XtermTerminalPanel({ session: new SerialSession({ serialManager }), bus, backendProvider, logger });
+serialTerminalPanel.mount(document.getElementById("serial-terminal"));
+```
+
+Remove any references to `serialLogger`, `createPanelLogger`, log-related elements that existed only for the old terminal.
+
+---
+
+### 7.8 CSS changes  **[NOT STARTED]**
+
+xterm.js injects its own `.xterm` CSS (already linked in step 7.1). You mainly need to ensure the xterm container fills its space.
+
+Add to `styles/terminal.css`:
+```css
+/* xterm.js needs its container to have an explicit height */
+.xterm-mount-point {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.xterm-mount-point .xterm,
+.xterm-mount-point .xterm-viewport,
+.xterm-mount-point .xterm-screen {
+  height: 100% !important;
+}
+```
+
+Remove CSS rules from `styles/terminal.css` that targeted:
+- `.terminal-send-row` (the old input row)
+- `.term-line`, `.term-line-pending` (old line rendering)
+- `.term-match`, `.term-match-current` (old search highlights)
+- `.history-popup` (old history dropdown above input)
+
+---
+
+### 7.9 Delete legacy files  **[NOT STARTED]**
+
+Only delete after all tests pass and the browser is confirmed working.
+
+| File | Action |
+|------|--------|
+| `src/ui/terminal-buffer.js` | Delete |
+| `src/ui/terminal-view.js` | Delete |
+| `src/ui/panels/unified-terminal-panel.js` | Delete |
+| `src/ui/components/terminal-controller.js` | Delete (sidebar code moved to TerminalSidebarController in 7.4) |
+| `src/ui/views/terminal-match-highlighter.js` | Delete (search highlights were part of old view) |
+| `src/ui/components/terminal-search-index.js` | Delete (can be revived later for xterm SearchAddon) |
+
+Keep:
+- `src/ui/terminals/terminal-session.js` ✓ (updated)
+- `src/ui/terminals/serial-session.js` ✓ (updated)
+- `src/ui/terminals/dap-uart-session.js` ✓ (updated)
+- `src/ui/terminals/rtt-session.js` ✓ (updated)
+- `src/ui/components/terminal-template-store.js` ✓
+- `src/ui/components/terminal-queue-runner.js` ✓
+- `src/ui/components/terminal-history-store.js` ✓ (for future line mode)
+
+---
+
+### 7.10 Implementation order
+
+Do these steps in order. Each step should leave the codebase working (tests pass, no broken imports).
+
+| Step | Task | Key check |
+|------|------|-----------|
+| 1 | npm setup + import maps (7.1) | `import { Terminal } from "@xterm/xterm"` works in browser console |
+| 2 | `sendRaw` on all sessions + tests (7.2) | New tests pass, existing tests unbroken |
+| 3 | `InputMode` + tests (7.3) | `input-mode.test.mjs` passes |
+| 4 | Extract `TerminalSidebarController` (7.4) | All existing terminal tests still pass |
+| 5 | Build `XtermTerminalPanel` skeleton — mount/unmount, no sidebars yet | xterm renders in browser, RX data appears, keypresses send bytes |
+| 6 | Wire Serial channel end-to-end | Type in xterm, bytes go to serial device |
+| 7 | Add sidebars to panel (use `TerminalSidebarController`) | Templates + Queue appear and work |
+| 8 | HTML cleanup — Serial section first (7.6) | Serial section looks correct |
+| 9 | app.js: switch Serial panel to `XtermTerminalPanel` (7.7) | Serial terminal fully working |
+| 10 | HTML + app.js: wire RTT channel | RTT channel working |
+| 11 | HTML + app.js: wire UART channel | UART channel working |
+| 12 | CSS fixes (7.8) | Layout looks correct, xterm fills container |
+| 13 | Delete legacy files (7.9) | All tests pass, no dead imports |
+
+---
+
 ## Out of Scope (Researched & Ruled Out)
 
 | Feature | Reason |

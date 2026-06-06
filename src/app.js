@@ -14,7 +14,7 @@ import { SwdMemoryPanel } from "./ui/panels/swd-memory-panel.js";
 import { SwdFirmwarePanel } from "./ui/panels/swd-firmware-panel.js";
 import { SwdConnectionPanel } from "./ui/panels/swd-connection-panel.js";
 import { SerialConnectionPanel } from "./ui/panels/serial-connection-panel.js";
-import { UnifiedTerminalPanel } from "./ui/panels/unified-terminal-panel.js";
+import { XtermTerminalPanel } from "./ui/panels/xterm-terminal-panel.js";
 import { RttSession } from "./ui/terminals/rtt-session.js";
 import { DapUartTerminalSession } from "./ui/terminals/dap-uart-session.js";
 import { SerialSession } from "./ui/terminals/serial-session.js";
@@ -119,26 +119,26 @@ async function init() {
   const uicrPanel = new SwdUicrPanel({ bus, backendProvider, logger });
   uicrPanel.mount(document.getElementById("tab-uicr"));
 
-  const rttPanel = new UnifiedTerminalPanel({
+  const rttPanel = new XtermTerminalPanel({
     session: new RttSession({ backendProvider }),
     bus, backendProvider, logger,
   });
-  rttPanel.mount(document.getElementById("tab-rtt"));
+  rttPanel.mount(document.getElementById("rtt-terminal"), document.getElementById("tab-rtt"));
 
-  const uartPanel = new UnifiedTerminalPanel({
+  const uartPanel = new XtermTerminalPanel({
     session: new DapUartTerminalSession({ backendProvider, logger }),
     bus, backendProvider, logger,
   });
-  uartPanel.mount(document.getElementById("tab-uart"));
+  uartPanel.mount(document.getElementById("uart-terminal"), document.getElementById("tab-uart"));
 
   const serialConnectionPanel = new SerialConnectionPanel({ bus, serialManager });
   serialConnectionPanel.mount(document.getElementById("serial-conn-controls"));
 
-  const serialTerminalPanel = new UnifiedTerminalPanel({
+  const serialTerminalPanel = new XtermTerminalPanel({
     session: new SerialSession({ serialManager }),
     bus, backendProvider, logger,
   });
-  serialTerminalPanel.mount(document.getElementById("serial-terminal-panel"));
+  serialTerminalPanel.mount(document.getElementById("serial-terminal"));
 
   navigator.serial?.addEventListener("disconnect", (e) => {
     if (serialManager._uart?._port === e.target) {
@@ -190,8 +190,35 @@ async function init() {
     if (percent >= 100) setTimeout(() => setFlashProgress(null), 1500);
   });
 
-  logEl.addEventListener("click", function() { this.classList.toggle("log-collapsed"); });
-  serialLogEl.addEventListener("click", function() { this.classList.toggle("log-collapsed"); });
+  function _setupEventLogCollapse(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const h2 = panel.querySelector("h2");
+    const row = panel.querySelector(".row");
+    const logPre = panel.querySelector("pre.log, .log-collapsed");
+    if (!h2 || panel.querySelector(".event-log-toggle")) return;
+
+    let collapsed = true;
+    const wrapper = document.createElement("div");
+    wrapper.className = "event-log-toggle";
+    wrapper.innerHTML = '<span class="arrow">\u25B6</span> Event Log';
+    h2.parentNode.insertBefore(wrapper, h2);
+    h2.style.display = "none";
+
+    if (row) row.classList.add("event-log-collapsed");
+    if (logPre) logPre.classList.add("event-log-collapsed");
+
+    wrapper.addEventListener("click", () => {
+      collapsed = !collapsed;
+      const arrow = wrapper.querySelector(".arrow");
+      arrow.classList.toggle("open", !collapsed);
+      if (row) row.classList.toggle("event-log-collapsed", collapsed);
+      if (logPre) logPre.classList.toggle("event-log-collapsed", collapsed);
+    });
+  }
+
+  _setupEventLogCollapse("event-log-panel");
+  _setupEventLogCollapse("serial-event-log-panel");
 
   document.getElementById("btn-log-clear").addEventListener("click", logger.clearLog);
   document.getElementById("btn-log-download").addEventListener("click", logger.downloadLogContent);

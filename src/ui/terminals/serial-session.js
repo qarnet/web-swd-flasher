@@ -1,10 +1,6 @@
 import { Topics } from "../../core/event-bus-topics.js";
 import { TerminalSession } from "./terminal-session.js";
 
-/**
- * SerialSession delegates connection management to SerialConnectionPanel
- * (which lives in the nav bar). This session only handles the data path.
- */
 export class SerialSession extends TerminalSession {
   constructor({ serialManager }) {
     super();
@@ -16,13 +12,10 @@ export class SerialSession extends TerminalSession {
 
   get channelId() { return "serial"; }
 
-  // The serial log pre has a non-standard ID due to "serial-log" being taken by event log.
-  get logSelector() { return "#serial-term-log"; }
-
   isReady() { return this._serialManager.connected; }
 
-  async send(text) {
-    await this._serialManager.send(new TextEncoder().encode(text + "\r\n"));
+  async sendRaw(bytes) {
+    await this._serialManager.send(bytes);
   }
 
   init({ bus, onData, onReadyChange }) {

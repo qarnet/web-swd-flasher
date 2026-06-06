@@ -29,6 +29,8 @@
             typescript-language-server
             xvfb
             google-chrome
+            openssl
+            mkcert
           ];
 
           env.PUPPETEER_SKIP_DOWNLOAD = "1";

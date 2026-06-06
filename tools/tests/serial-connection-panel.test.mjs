@@ -9,6 +9,8 @@ class FakeSerialManager {
   static supported = true;
   constructor() { this._connected = false; }
   get connected() { return this._connected; }
+  async getAuthorizedPorts() { return []; }
+  async useAuthorizedPort() { return { usbVendorId: 0x2e8a, usbProductId: 0x000c }; }
   async requestPort() { return { usbVendorId: 0x2e8a, usbProductId: 0x000c }; }
   async connect(opts) { this._connected = true; }
   async disconnect() { this._connected = false; }

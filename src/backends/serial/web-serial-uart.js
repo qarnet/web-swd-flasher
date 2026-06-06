@@ -25,6 +25,13 @@ export class WebSerialUart {
     return ports.map(p => p.getInfo());
   }
 
+  async useAuthorizedPort() {
+    const ports = await navigator.serial.getPorts();
+    if (ports.length === 0) return null;
+    this._port = ports[0];
+    return this._port.getInfo();
+  }
+
   async open({ baudRate = 115200, dataBits = 8, stopBits = 1, parity = "none", flowControl = "none", onData = null } = {}) {
     if (!this._port) throw new Error("No serial port selected — call requestPort() first");
     await this._port.open({ baudRate, dataBits, stopBits, parity, flowControl });

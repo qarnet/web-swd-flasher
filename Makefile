@@ -1,13 +1,19 @@
 .PHONY: serve serve-https tools-install test hitl hitl-flash hitl-recovery hitl-all browser-smoke browser-smoke-headless browser-smoke-xvfb stamp-build-info
 
+PORT ?= 8000
+HTTPS_PORT ?= 8443
+
 stamp-build-info:
 	@echo "export const BUILD_TIMESTAMP = \"$(shell date -u +%Y-%m-%dT%H:%M:%SZ)\";" > src/build-info.js
 
-serve: stamp-build-info
-	python -m http.server 8000
+node_modules: package.json
+	npm install
 
-serve-https: stamp-build-info
-	python3 serve-https.py 8443
+serve: node_modules stamp-build-info
+	python -m http.server $(PORT)
+
+serve-https: node_modules stamp-build-info
+	python3 serve-https.py $(HTTPS_PORT)
 
 tools-install:
 	PUPPETEER_SKIP_DOWNLOAD=1 npm --prefix tools install

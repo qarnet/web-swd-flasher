@@ -30,6 +30,8 @@ test("terminal-template-store: deriveVars extracts placeholders", () => {
   setup();
   assert.deepEqual(deriveVars("${A}x${B}${A}"), ["A", "B"]);
   assert.deepEqual(deriveVars("no vars here"), []);
+  assert.deepEqual(deriveVars("${start}"), ["start"]);
+  assert.deepEqual(deriveVars("count ${start} ${amount}"), ["start", "amount"]);
 });
 
 test("terminal-template-store: resolve substitutes values", () => {
@@ -37,6 +39,8 @@ test("terminal-template-store: resolve substitutes values", () => {
   assert.equal(resolve("${A}+${B}", { A: "1" }), "1+");
   assert.equal(resolve("hello ${X}", { X: "world" }), "hello world");
   assert.equal(resolve("${MISSING}", {}), "");
+  assert.equal(resolve("count ${start} ${amount}", { start: "0", amount: "10" }), "count 0 10");
+  assert.equal(resolve("${a} ${b} ${c}", { a: "x", b: "y", c: "z" }), "x y z");
 });
 
 test("terminal-template-store: save rejects duplicate name case-insensitive", () => {
