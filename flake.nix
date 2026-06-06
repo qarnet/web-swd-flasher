@@ -31,6 +31,12 @@
             google-chrome
             openssl
             mkcert
+            # native addon build deps (usb, node-hid for HITL probe access)
+            pkg-config
+            libusb1
+            hidapi
+            udev
+            python3
           ];
 
           env.PUPPETEER_SKIP_DOWNLOAD = "1";
