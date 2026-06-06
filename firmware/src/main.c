@@ -31,6 +31,17 @@ static bool counter_running = true;
 static uint32_t counter_value;
 static uint32_t rx_byte_count;
 
+static const char spam_hex_table[] = "0123456789abcdef";
+
+static bool spam_running;
+static uint32_t spam_remaining;
+static bool spam_hex;
+static uint32_t spam_delay_ms;
+static char spam_last_data[64];
+static bool spam_delay_active;
+static int64_t spam_next_packet;
+static uint32_t spam_sent;
+
 static void cli_write(const char *text)
 {
 	for (size_t i = 0; text[i] != '\0'; i++) {
@@ -119,7 +130,12 @@ static void cmd_help(void)
 		"  uptime\r\n"
 		"  info\r\n"
 		"  delay <ms>\r\n"
-		"  rand [min] [max]\r\n");
+		"  rand [min] [max]\r\n"
+		"  spam <bytes> [format=binary] [last_data=\"\\r\\n\"] [delay=10]\r\n"
+		"    format: hex (0-9a-f chars) or binary (raw uint8_t)\r\n"
+		"    last_data: suffix printed after all packets (supports \\\\r \\\\n \\\\t \\\\)\r\n"
+		"    delay: ms between 256-byte packets (min 1ms)\r\n"
+		"  spam stop\r\n");
 }
 
 static void cmd_ping(void)
@@ -256,6 +272,158 @@ static void cmd_rand(size_t argc, char **argv)
 		min + (long)(sys_rand32_get() % (uint32_t)(max - min + 1L)));
 }
 
+static size_t unescape_string(const char *src, char *dst, size_t dst_len)
+{
+	size_t out = 0;
+
+	while (*src != '\0' && out < dst_len - 1U) {
+		if (*src == '\\' && *(src + 1) != '\0') {
+			src++;
+			switch (*src) {
+			case 'r':
+				dst[out++] = '\r';
+				break;
+			case 'n':
+				dst[out++] = '\n';
+				break;
+			case 't':
+				dst[out++] = '\t';
+				break;
+			case '\\':
+				dst[out++] = '\\';
+				break;
+			default:
+				dst[out++] = '\\';
+				if (out < dst_len - 1U) {
+					dst[out++] = *src;
+				}
+				break;
+			}
+		} else {
+			dst[out++] = *src;
+		}
+		src++;
+	}
+
+	dst[out] = '\0';
+	return out;
+}
+
+static void spam_tick(void)
+{
+	if (!spam_running) {
+		return;
+	}
+
+	if (spam_delay_active) {
+		if (k_uptime_get() < spam_next_packet) {
+			return;
+		}
+		spam_delay_active = false;
+	}
+
+	while (spam_running && spam_remaining > 0U && !spam_delay_active) {
+		uint32_t pkt = MIN(spam_remaining, 256U);
+
+		for (uint32_t i = 0U; i < pkt && spam_running; i++) {
+			uint8_t b;
+
+			if (spam_hex) {
+				b = (uint8_t)spam_hex_table[sys_rand32_get() % 16U];
+			} else {
+				b = (uint8_t)(sys_rand32_get() & 0xFFU);
+			}
+
+			uart_poll_out(cli_uart, b);
+		}
+
+		spam_remaining -= pkt;
+		spam_sent += pkt;
+
+		if (spam_remaining > 0U && spam_running) {
+			spam_delay_active = true;
+			spam_next_packet = k_uptime_get() + (int64_t)spam_delay_ms;
+			return;
+		}
+	}
+
+	if (spam_running) {
+		cli_write(spam_last_data);
+		cli_printf("Spam complete: %u bytes sent\r\n", spam_sent);
+	} else {
+		cli_printf("Spam stopped: %u bytes sent\r\n", spam_sent);
+	}
+
+	spam_running = false;
+	cli_prompt();
+}
+
+static void cmd_spam(size_t argc, char **argv)
+{
+	if (argc >= 2U && strcmp(argv[1], "stop") == 0) {
+		if (!spam_running) {
+			cli_write("Spam not running\r\n");
+			return;
+		}
+		spam_running = false;
+		return;
+	}
+
+	if (argc < 2U) {
+		cli_write("Usage: spam <bytes> [format=binary] [last_data=\"\\r\\n\"] [delay=10]\r\n");
+		return;
+	}
+
+	long bytes_val;
+
+	if (!parse_long(argv[1], &bytes_val) || bytes_val < 0L) {
+		cli_write("Invalid bytes value\r\n");
+		return;
+	}
+
+	bool hex = false;
+
+	if (argc >= 3U) {
+		if (strcmp(argv[2], "hex") == 0) {
+			hex = true;
+		} else if (strcmp(argv[2], "binary") != 0) {
+			cli_write("Format must be 'hex' or 'binary'\r\n");
+			return;
+		}
+	}
+
+	char last_data[64] = "\\r\\n";
+
+	if (argc >= 4U) {
+		unescape_string(argv[3], last_data, sizeof(last_data));
+	}
+
+	long delay_val = 10L;
+
+	if (argc >= 5U) {
+		if (!parse_long(argv[4], &delay_val)) {
+			cli_write("Invalid delay value\r\n");
+			return;
+		}
+	}
+
+	if (delay_val < 1L) {
+		delay_val = 1L;
+	}
+
+	spam_running = true;
+	spam_remaining = (uint32_t)bytes_val;
+	spam_hex = hex;
+	spam_delay_ms = (uint32_t)delay_val;
+	strncpy(spam_last_data, last_data, sizeof(spam_last_data) - 1U);
+	spam_last_data[sizeof(spam_last_data) - 1U] = '\0';
+	spam_delay_active = false;
+	spam_sent = 0U;
+
+	cli_printf("Spamming %u bytes (%s, delay=%ums)\r\n",
+		spam_remaining, spam_hex ? "hex" : "binary", spam_delay_ms);
+}
+
 static void process_command(char *line)
 {
 	char *argv[CLI_ARG_MAX];
@@ -284,6 +452,8 @@ static void process_command(char *line)
 		cmd_delay(argc, argv);
 	} else if (strcmp(argv[0], "rand") == 0) {
 		cmd_rand(argc, argv);
+	} else if (strcmp(argv[0], "spam") == 0) {
+		cmd_spam(argc, argv);
 	} else {
 		cli_write("Unknown command. Type 'help'.\r\n");
 	}
@@ -365,6 +535,8 @@ int main(void)
 			counter_value++;
 			next_tick += 1000;
 		}
+
+		spam_tick();
 
 		k_msleep(1);
 	}
