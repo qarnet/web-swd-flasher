@@ -117,6 +117,26 @@
   height: 100% !important;
 }
 
+/* Transparent scrollbar — thumb only, no track */
+.xterm-mount-point .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.xterm-mount-point .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xterm-mount-point .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+.xterm-mount-point .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+/* Firefox */
+.xterm-mount-point .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
 /* ===== xterm font size group (inside settings dropdown) ===== */
 .dd-fontsize {
   display: flex;
