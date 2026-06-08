@@ -18,6 +18,7 @@ export function makeDom(html) {
   globalThis.location = { protocol: "https:", hostname: "localhost" };
   globalThis.localStorage = window.localStorage;
   globalThis.MutationObserver = window.MutationObserver || class { constructor() {} observe() {} disconnect() {} };
+  globalThis.ResizeObserver = class { constructor(cb) { this._cb = cb; } observe(target) { this._target = target; } unobserve() {} disconnect() {} trigger() { try { this._cb([{ target: this._target, contentRect: { width: 800, height: 600 } }]); } catch {} } };
   globalThis.Blob = class Blob {};
   globalThis.URL = { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} };
   Object.defineProperty(globalThis, "navigator", { value: window.navigator, configurable: true });

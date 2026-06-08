@@ -5,7 +5,8 @@
   "scripts": {
     "browser-smoke": "node browser-smoke.mjs",
     "browser-tests": "node browser-tests.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test --import ./tests/xterm-mock-init.mjs tests/*.test.mjs",
+    "test:no-mock": "node --test tests/*.test.mjs",
     "hitl": "node --test tests/hitl/*.test.mjs",
     "hitl-flash": "node --test tests/hitl/*.test.mjs --flash-test",
     "hitl-recovery": "node --test tests/hitl/*.test.mjs --recovery-test",
