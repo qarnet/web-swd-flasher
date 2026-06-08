@@ -16,6 +16,8 @@ function makeBackend(overrides = {}) {
     connect: async () => {},
     disconnect: async () => {},
     selectSwdTarget: async () => {},
+    transfer: async (port, register, value) => 0x00000000,
+    transferMultiple: async (ops) => ops.map(() => 0x00000000),
   };
   const adi = overrides.adi || Object.assign(new FakeAdi(), {
     connectSwd: async () => {},
@@ -380,4 +382,145 @@ test("CmsisDapBackend: capabilities returns all true", () => {
   assert.equal(caps.supportsVerify, true);
   assert.equal(caps.supportsReset, true);
   assert.equal(caps.supportsRecovery, true);
+});
+
+test("CmsisDapBackend: diagRawRead32 returns 7-step diagnostic object", async () => {
+  const backend = makeBackend();
+  const results = await backend.diagRawRead32(0x20000000);
+  assert.ok(results.step1_selectAp);
+  assert.ok(results.step2_writeCSW);
+  assert.ok(results.step3_writeTAR);
+  assert.ok(results.step4_readDRW);
+  assert.ok(results.step5_selectAp_again);
+  assert.ok(results.step6_readMem32);
+  assert.ok(results.step7_readAnotherAddr);
+  for (const v of Object.values(results)) {
+    assert.equal(typeof v, "string");
+  }
+});
+
+test("CmsisDapBackend: diagRawRead32 step1 selects AP 0 and reads DP SELECT", async () => {
+  const adi = new FakeAdi();
+  const transferCalls = [];
+  const core = {
+    _caps: {}, connect: async () => {}, disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async (port, reg, val) => {
+      transferCalls.push({ port, reg, val });
+      return 0xa5a5a5a5;
+    },
+    transferMultiple: async () => [0],
+  };
+  const backend = makeBackend({ adi, core });
+  const results = await backend.diagRawRead32(0x20000000);
+  assert.deepEqual(adi.selectApCalls[0], { apIndex: 0, bank: 0 });
+  assert.ok(transferCalls.some(c => c.port === "dp" && c.reg === 0x08));
+  assert.ok(results.step1_selectAp.includes("a5a5a5a5"));
+});
+
+test("CmsisDapBackend: diagRawRead32 step3 TAR value matches address", async () => {
+  const transferMultipleCalls = [];
+  const core = {
+    _caps: {}, connect: async () => {}, disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async () => 0,
+    transferMultiple: async (ops) => { transferMultipleCalls.push(ops); return ops.map(() => 0); },
+  };
+  const backend = makeBackend({ core });
+  await backend.diagRawRead32(0x20001234);
+  const tarWrite = transferMultipleCalls.find(call =>
+    call.some(op => op.port === "ap" && op.register === 0x04)
+  );
+  assert.ok(tarWrite);
+  const tarOp = tarWrite.find(op => op.register === 0x04);
+  assert.equal(tarOp.value, 0x20001234);
+  assert.ok(tarOp.value === (0x20001234 >>> 0));
+});
+
+test("CmsisDapBackend: diagRawRead32 step2 writes CSW=0x23000052 to AP register 0x00", async () => {
+  const transferMultipleCalls = [];
+  const core = {
+    _caps: {}, connect: async () => {}, disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async () => 0,
+    transferMultiple: async (ops) => { transferMultipleCalls.push(ops); return ops.map(() => 0); },
+  };
+  const backend = makeBackend({ core });
+  await backend.diagRawRead32(0x20000000);
+  const cswWrite = transferMultipleCalls.find(call =>
+    call.some(op => op.port === "ap" && op.register === 0x00 && op.value === 0x23000052)
+  );
+  assert.ok(cswWrite);
+});
+
+test("CmsisDapBackend: connect calls core.connect then adi.connectSwd", async () => {
+  const callOrder = [];
+  const core = {
+    _caps: {}, connect: async () => { callOrder.push("core.connect"); },
+    disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async () => 0, transferMultiple: async () => [0],
+  };
+  const adi = new FakeAdi();
+  const origSelectAp = adi.selectAp.bind(adi);
+  adi.selectAp = async (...args) => { callOrder.push("adi.selectAp"); return origSelectAp(...args); };
+  adi.connectSwd = async () => { callOrder.push("adi.connectSwd"); };
+  const backend = makeBackend({ core, adi });
+  await backend.connect();
+  const coreIdx = callOrder.indexOf("core.connect");
+  const swdIdx = callOrder.indexOf("adi.connectSwd");
+  assert.ok(coreIdx >= 0);
+  assert.ok(swdIdx >= 0);
+  assert.ok(coreIdx < swdIdx, `core.connect should fire before adi.connectSwd: ${callOrder.join(", ")}`);
+});
+
+test("CmsisDapBackend: connect populates _detectedTarget and _ficr", async () => {
+  const adi = Object.assign(new FakeAdi(), { connectSwd: async () => {} });
+  const validFicr = new Uint8Array(0x14);
+  const view = new DataView(validFicr.buffer);
+  view.setUint32(0x00, 0x52840, true);
+  adi.readMemBlock = async (addr, len) => validFicr;
+  const backend = makeBackend({ adi });
+  await backend.connect();
+  assert.ok(backend._detectedTarget);
+  assert.ok(backend._ficr);
+  assert.equal(backend._ficr.part, 0x52840);
+});
+
+test("CmsisDapBackend: connect creates _flash programmer via createFlashProgrammer", async () => {
+  const adi = Object.assign(new FakeAdi(), { connectSwd: async () => {} });
+  const backend = makeBackend({ adi });
+  await backend.connect();
+  assert.ok(backend._flash, "flash programmer should be created");
+});
+
+test("CmsisDapBackend: connect propagates errors from core.connect", async () => {
+  const core = {
+    _caps: {}, connect: async () => { throw new Error("core boom"); },
+    disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async () => 0, transferMultiple: async () => [0],
+  };
+  const backend = makeBackend({ core });
+  await assert.rejects(() => backend.connect(), /core boom/);
+});
+
+test("CmsisDapBackend: connect propagates errors from adi.connectSwd", async () => {
+  const adi = new FakeAdi();
+  adi.connectSwd = async () => { throw new Error("swd boom"); };
+  const backend = makeBackend({ adi });
+  await assert.rejects(() => backend.connect(), /swd boom/);
+});
+
+test("CmsisDapBackend: diagRawRead32 step4 reads DRW (AP register 0x0c)", async () => {
+  const transferMultipleCalls = [];
+  const core = {
+    _caps: {}, connect: async () => {}, disconnect: async () => {}, selectSwdTarget: async () => {},
+    transfer: async () => 0,
+    transferMultiple: async (ops) => {
+      transferMultipleCalls.push(ops);
+      return ops.map(() => 0xdeadbeef);
+    },
+  };
+  const backend = makeBackend({ core });
+  await backend.diagRawRead32(0x20000000);
+  const drwRead = transferMultipleCalls.find(call =>
+    call.some(op => op.port === "ap" && op.register === 0x0c && op.value === null)
+  );
+  assert.ok(drwRead);
 });

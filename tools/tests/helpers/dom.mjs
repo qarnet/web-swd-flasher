@@ -1,5 +1,29 @@
 import { parseHTML } from "linkedom";
 
+let _testStore = {};
+export function setupStore() {
+  _testStore = {};
+  globalThis.localStorage = {
+    getItem(k) { return _testStore[k] ?? null; },
+    setItem(k, v) { _testStore[k] = v; },
+    removeItem(k) { delete _testStore[k]; },
+  };
+}
+export function makeDomAndStore(html) {
+  makeDom(html);
+  globalThis.localStorage = {
+    getItem(k) { return _testStore[k] ?? null; },
+    setItem(k, v) { _testStore[k] = v; },
+    removeItem(k) { delete _testStore[k]; },
+  };
+}
+export function getStoreValue(key) { return _testStore[key]; }
+export function seedStore(key, value) { _testStore[key] = value; }
+export function attachControls(session) {
+  const container = session.buildControls();
+  document.getElementById("root").appendChild(container);
+}
+
 export function makeDom(html) {
   const { window, document: doc } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
   window.confirm = () => true;
@@ -32,5 +56,7 @@ export function teardownDom() {
   delete globalThis.localStorage;
   delete globalThis.Blob;
   delete globalThis.URL;
+  delete globalThis.ResizeObserver;
   Object.defineProperty(globalThis, "navigator", { value: undefined, configurable: true });
+  _testStore = {};
 }

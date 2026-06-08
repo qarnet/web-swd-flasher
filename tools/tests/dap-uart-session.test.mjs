@@ -1,32 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makeDom, teardownDom } from "./helpers/dom.mjs";
+import { setupStore, makeDomAndStore, attachControls } from "./helpers/dom.mjs";
 import { DapUartTerminalSession } from "../../src/ui/terminals/dap-uart-session.js";
 import { EventBus } from "../../src/core/event-bus.js";
 import { Topics } from "../../src/core/event-bus-topics.js";
-
-let _store = {};
-function setupStore() {
-  _store = {};
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-function makeDomAndStore(html) {
-  makeDom(html);
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-
-function attachControls(session) {
-  const container = session.buildControls();
-  globalThis.document.getElementById("root").appendChild(container);
-}
 
 function makeFakeBackendCore() {
   const sent = [];

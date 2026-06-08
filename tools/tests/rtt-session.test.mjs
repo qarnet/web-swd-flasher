@@ -1,32 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makeDom, teardownDom } from "./helpers/dom.mjs";
+import { setupStore, makeDomAndStore, attachControls, getStoreValue } from "./helpers/dom.mjs";
 import { RttSession } from "../../src/ui/terminals/rtt-session.js";
 import { EventBus } from "../../src/core/event-bus.js";
 import { Topics } from "../../src/core/event-bus-topics.js";
-
-let _store = {};
-function setupStore() {
-  _store = {};
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-function makeDomAndStore(html) {
-  makeDom(html);
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-
-function attachControls(session) {
-  const container = session.buildControls();
-  globalThis.document.getElementById("root").appendChild(container);
-}
 
 function makeFakeRttClient(opts = {}) {
   return {
@@ -155,7 +132,7 @@ test("RttSession: buildControls persists inputs via persistInput", () => {
   const ramStart = globalThis.document.querySelector(".rtt-ram-start");
   ramStart.value = "0x20010000";
   ramStart.dispatchEvent(new globalThis.window.Event("change", { bubbles: true }));
-  assert.equal(_store["rtt-ram-start"], "0x20010000");
+  assert.equal(getStoreValue("rtt-ram-start"), "0x20010000");
 });
 
 test("RttSession: _parseHexInput parses 0x prefix", () => {

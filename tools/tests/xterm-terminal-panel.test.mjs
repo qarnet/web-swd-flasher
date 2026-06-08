@@ -1,29 +1,11 @@
 // Run with: node --test --import ./tests/xterm-mock-init.mjs tests/xterm-terminal-panel.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makeDom, teardownDom } from "./helpers/dom.mjs";
+import { setupStore, makeDomAndStore, getStoreValue, seedStore } from "./helpers/dom.mjs";
 import { XtermTerminalPanel } from "../../src/ui/panels/xterm-terminal-panel.js";
 import { TerminalSidebarController } from "../../src/ui/components/terminal-sidebar-controller.js";
 import { EventBus } from "../../src/core/event-bus.js";
 import { Topics } from "../../src/core/event-bus-topics.js";
-
-let _store = {};
-function setupStore() {
-  _store = {};
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-function makeDomAndStore(html) {
-  makeDom(html);
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
 
 function makeFakeSession(opts = {}) {
   let ready = false;
@@ -97,7 +79,7 @@ test("XtermTerminalPanel: mount uses default font size 14 when no localStorage v
 test("XtermTerminalPanel: mount uses saved font size from localStorage", () => {
   setupStore();
   makeDomAndStore("<div id='root'></div>");
-  _store["terminal:fontsize:test"] = "20";
+  seedStore("terminal:fontsize:test", "20");
   const root = globalThis.document.getElementById("root");
   const session = makeFakeSession({ channelId: "test" });
   const bus = new EventBus();
@@ -362,7 +344,7 @@ test("XtermTerminalPanel: font size persists to localStorage", () => {
   settingsBtn.click();
   const inc = root.querySelector(".btn-font-increase");
   inc.click();
-  assert.equal(_store["terminal:fontsize:test"], "15");
+  assert.equal(getStoreValue("terminal:fontsize:test"), "15");
 });
 
 test("XtermTerminalPanel: font size clamped to 8 minimum", () => {
@@ -439,4 +421,58 @@ test("XtermTerminalPanel: download log button uses downloadLog helper", () => {
   assert.ok(clickedAnchor);
   assert.equal(createdBlob.type, "text/plain");
   assert.ok(clickedAnchor.download.startsWith("test-log-"));
+});
+
+test("XtermTerminalPanel: Escape key in search input closes all dropdowns", () => {
+  setupStore();
+  makeDomAndStore("<div id='root'></div>");
+  const root = globalThis.document.getElementById("root");
+  const session = makeFakeSession();
+  const bus = new EventBus();
+  const panel = new XtermTerminalPanel({ session, bus, backendProvider: () => null, logger: { log: () => {} } });
+  panel.mount(root);
+  const searchBtn = Array.from(root.querySelectorAll(".toolbar-btn")).find(b => b.title === "Search");
+  searchBtn.click();
+  const searchInput = root.querySelector(".search-query");
+  assert.ok(searchInput);
+  const ev = new globalThis.window.Event("keydown", { bubbles: true });
+  ev.key = "Escape";
+  searchInput.dispatchEvent(ev);
+  const dropdowns = root.querySelectorAll(".terminal-dropdown");
+  for (const d of dropdowns) {
+    assert.equal(d.style.display, "none", `dropdown should be hidden after Escape`);
+  }
+});
+
+test("XtermTerminalPanel: copy button click is safe with empty log", () => {
+  setupStore();
+  makeDomAndStore("<div id='root'></div>");
+  const root = globalThis.document.getElementById("root");
+  const session = makeFakeSession();
+  const bus = new EventBus();
+  const panel = new XtermTerminalPanel({ session, bus, backendProvider: () => null, logger: { log: () => {} } });
+  panel.mount(root);
+  globalThis.navigator.clipboard = {
+    writeText: () => Promise.resolve(),
+  };
+  const settingsBtn = Array.from(root.querySelectorAll(".toolbar-btn")).find(b => b.title === "Settings");
+  settingsBtn.click();
+  const copyBtn = root.querySelector(".dd-copy");
+  assert.doesNotThrow(() => copyBtn.click());
+});
+
+test("XtermTerminalPanel: sidebar DOM elements are reparented into correct grid slots", () => {
+  setupStore();
+  makeDomAndStore("<div id='root'></div>");
+  const root = globalThis.document.getElementById("root");
+  const session = makeFakeSession();
+  const bus = new EventBus();
+  const panel = new XtermTerminalPanel({ session, bus, backendProvider: () => null, logger: { log: () => {} } });
+  panel.mount(root);
+  const templatesSlot = root.querySelector(".terminal-templates-slot");
+  const queueSlot = root.querySelector(".terminal-queue-slot");
+  const templates = templatesSlot.querySelector(".terminal-templates");
+  const queue = queueSlot.querySelector(".terminal-queue");
+  assert.ok(templates, "templates aside should be in templates slot");
+  assert.ok(queue, "queue aside should be in queue slot");
 });

@@ -1,36 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makeDom, teardownDom } from "./helpers/dom.mjs";
+import { setupStore as baseSetupStore, makeDomAndStore, getStoreValue } from "./helpers/dom.mjs";
 import { TerminalSidebarController } from "../../src/ui/components/terminal-sidebar-controller.js";
 import { saveTemplate as saveTpl, deleteTemplate as deleteTpl, getTemplates } from "../../src/ui/components/terminal-template-store.js";
 import { pushHistory, clearHistory } from "../../src/ui/components/terminal-history-store.js";
 
-let _store = {};
 function setupStore() {
   for (const t of getTemplates()) deleteTpl(t.id);
-  _store = {};
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
-}
-function makeDomAndStore(html) {
-  makeDom(html);
-  globalThis.localStorage = {
-    getItem(k) { return _store[k] ?? null; },
-    setItem(k, v) { _store[k] = v; },
-    removeItem(k) { delete _store[k]; },
-  };
+  baseSetupStore();
 }
 function seedQueue(items) {
   globalThis.localStorage.setItem("terminal:queue", JSON.stringify(items));
-}
-function seedStoreDirect(key, value) {
-  _store[key] = value;
-}
-function getStoreValue(key) {
-  return _store[key];
 }
 
 test("sidebar: mount creates .terminal-templates aside with title and new button", () => {
@@ -208,7 +188,7 @@ test("sidebar: variable input change persists value", () => {
   const input = root.querySelector("input[data-var='V']");
   input.value = "newval";
   input.dispatchEvent(new globalThis.window.Event("change", { bubbles: true }));
-  const raw = JSON.parse(_store["terminal:template-vars"]);
+  const raw = JSON.parse(getStoreValue("terminal:template-vars"));
   assert.equal(raw[r.id].V, "newval");
   deleteTpl(r.id);
 });
@@ -282,7 +262,7 @@ test("sidebar: Send button pushes to history on success", async () => {
   input.dispatchEvent(new globalThis.window.Event("change", { bubbles: true }));
   root.querySelector(".tpl-send-btn").click();
   await new Promise(r => setTimeout(r, 10));
-  const raw = JSON.parse(_store["terminal:history"] ?? "[]");
+  const raw = JSON.parse(getStoreValue("terminal:history") ?? "[]");
   assert.ok(raw.includes("hello"));
   deleteTpl(r.id);
   clearHistory();
@@ -399,7 +379,7 @@ test("sidebar: queue delay input change updates item delayMs", () => {
   const input = root.querySelector(".q-item-delay-input");
   input.value = "500";
   input.dispatchEvent(new globalThis.window.Event("change", { bubbles: true }));
-  const saved = JSON.parse(_store["terminal:queue"]);
+  const saved = JSON.parse(getStoreValue("terminal:queue"));
   assert.equal(saved[0].delayMs, 500);
 });
 
@@ -413,7 +393,7 @@ test("sidebar: queue delay input non-numeric parses to 0", () => {
   const input = root.querySelector(".q-item-delay-input");
   input.value = "abc";
   input.dispatchEvent(new globalThis.window.Event("change", { bubbles: true }));
-  const saved = JSON.parse(_store["terminal:queue"]);
+  const saved = JSON.parse(getStoreValue("terminal:queue"));
   assert.equal(saved[0].delayMs, 0);
 });
 
@@ -541,7 +521,7 @@ test("sidebar: queue Import with valid JSON imports templates and queue", async 
   assert.ok(alertMsg, "alertMsg should be set");
   assert.ok(alertMsg.includes("Templates"));
   assert.ok(alertMsg.includes("Queue"));
-  const saved = JSON.parse(_store["terminal:queue"]);
+  const saved = JSON.parse(getStoreValue("terminal:queue"));
   assert.equal(saved.length, 1);
   assert.equal(saved[0].text, "impcmd");
   deleteTpl("t1");
@@ -703,7 +683,7 @@ test("sidebar: queue itemSent event pushes to history", () => {
   const ctrl = new TerminalSidebarController({ rootEl: root, channelId: "test", send: async () => {}, isReady: () => true });
   ctrl.mount();
   ctrl.queueRunner._emit("itemSent", { text: "sent-cmd", delayMs: 0, id: "a" });
-  const raw = JSON.parse(_store["terminal:history"] ?? "[]");
+  const raw = JSON.parse(getStoreValue("terminal:history") ?? "[]");
   assert.ok(raw.includes("sent-cmd"));
   clearHistory();
 });
@@ -719,6 +699,6 @@ test("sidebar: queue storage event triggers reload from localStorage", () => {
   assert.equal(ctrl.queueRunner.getItems()[0].text, "first");
   ctrl.queueRunner.setItems([{ id: "b", text: "external", delayMs: 50, status: "pending" }]);
   assert.equal(ctrl.queueRunner.getItems()[0].text, "external");
-  const saved = JSON.parse(_store["terminal:queue"]);
+  const saved = JSON.parse(getStoreValue("terminal:queue"));
   assert.equal(saved[0].text, "external");
 });
